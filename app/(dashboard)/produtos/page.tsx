@@ -9,14 +9,13 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { ProductSheet } from '@/components/forms/product-sheet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Toaster } from '@/components/ui/toaster'
 import { toast } from '@/components/ui/use-toast'
 import { Package, Pencil, Trash2 } from 'lucide-react'
 import type { Product } from '@/lib/supabase/types'
 
 // Pool de cores que cicla conforme novos tipos são criados
 const COLOR_POOL = [
-  'bg-sky-50 text-sky-700 border-sky-200',
+  'bg-teal-50 text-teal-700 border-teal-200',
   'bg-violet-50 text-violet-700 border-violet-200',
   'bg-emerald-50 text-emerald-700 border-emerald-200',
   'bg-amber-50 text-amber-700 border-amber-200',
@@ -104,8 +103,8 @@ export default function ProdutosPage() {
             onClick={() => setActiveFilter(null)}
             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors border ${
               activeFilter === null
-                ? 'bg-sky-600 text-white border-sky-600'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300 hover:text-sky-700'
+                ? 'bg-teal-600 text-white border-teal-600'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-teal-300 hover:text-teal-700'
             }`}
           >
             Todos ({products.length})
@@ -118,8 +117,8 @@ export default function ProdutosPage() {
                 onClick={() => setActiveFilter(activeFilter === type ? null : type)}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors border ${
                   activeFilter === type
-                    ? 'bg-sky-600 text-white border-sky-600'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300 hover:text-sky-700'
+                    ? 'bg-teal-600 text-white border-teal-600'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-teal-300 hover:text-teal-700'
                 }`}
               >
                 {type} ({count})
@@ -196,7 +195,6 @@ export default function ProdutosPage() {
         description={`Tem certeza que deseja excluir "${deleteTarget?.name}"?`}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} />
 
-      <Toaster />
     </div>
   )
 }

@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import { ChevronLeft, ChevronRight, Target, Check, X, Pencil, Plus, Loader2 } from 'lucide-react'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/utils'
 import type { Goal, Product } from '@/lib/supabase/types'
@@ -152,7 +151,7 @@ export default function MetasPage() {
       <div className="flex items-center justify-between">
         <PageHeader title="Metas" description="Orçamento vs realizado por produto e ano" />
         {productsWithoutGoal.length > 0 && (
-          <Button size="sm" onClick={() => setAddingProduct(true)} className="bg-sky-600 hover:bg-sky-700 gap-2">
+          <Button size="sm" onClick={() => setAddingProduct(true)} className="bg-teal-600 hover:bg-teal-700 gap-2">
             <Plus size={14} /> Adicionar produto
           </Button>
         )}
@@ -229,7 +228,7 @@ export default function MetasPage() {
               <Button
                 size="sm"
                 onClick={() => setAddingProduct(true)}
-                className="mt-4 bg-sky-600 hover:bg-sky-700 gap-2"
+                className="mt-4 bg-teal-600 hover:bg-teal-700 gap-2"
               >
                 <Plus size={14} /> Adicionar meta
               </Button>
@@ -353,7 +352,6 @@ export default function MetasPage() {
         )}
       </div>
 
-      <Toaster />
     </div>
   )
 }
@@ -385,8 +383,8 @@ function AddGoalRow({
   }
 
   return (
-    <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
-      <p className="text-sm font-medium text-sky-700 mb-3">Nova meta — {year}</p>
+    <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
+      <p className="text-sm font-medium text-teal-700 mb-3">Nova meta — {year}</p>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 items-end">
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-slate-600">Produto</label>
@@ -409,7 +407,7 @@ function AddGoalRow({
           <Input type="number" step="0.01" min="0" value={ticket} onChange={(e) => setTicket(e.target.value)} className="h-9" />
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleSave} disabled={saving} className="bg-sky-600 hover:bg-sky-700 gap-2 flex-1">
+          <Button onClick={handleSave} disabled={saving} className="bg-teal-600 hover:bg-teal-700 gap-2 flex-1">
             {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
             Salvar
           </Button>

@@ -14,10 +14,11 @@ import type { Entry } from '@/lib/supabase/types'
  */
 export async function generateProjectEntries(params: {
   project_id: string
-  company_id: string
+  company_id: string | null
   client_id: string
   revenue: number
   installments: number
+  billing_start_date?: string | null
   classification?: string
 }) {
   const supabase = createClient()
@@ -28,14 +29,20 @@ export async function generateProjectEntries(params: {
     client_id,
     revenue,
     installments,
+    billing_start_date,
     classification = 'Receita',
   } = params
 
   const amountPerInstallment = revenue / installments
-  const today = new Date()
+  // Se billing_start_date informado, primeira parcela cai naquele mês;
+  // caso contrário, usa o mês corrente (parcela 1 = último dia do mês atual)
+  const baseDate = billing_start_date
+    ? new Date(billing_start_date + 'T12:00:00')
+    : new Date()
 
   const entries = Array.from({ length: installments }, (_, i) => {
-    const paymentDate = new Date(today.getFullYear(), today.getMonth() + i + 1, 0)
+    // new Date(year, month+1, 0) = último dia do mês `month` (0-based)
+    const paymentDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + i + 1, 0)
     return {
       project_id,
       company_id,
@@ -82,6 +89,34 @@ export async function updateEntryStatus(
     field: 'status',
     old_value: oldStatus,
     new_value: newStatus,
+  })
+
+  revalidatePath('/lancamentos')
+}
+
+/**
+ * Atualiza classificação de um lançamento e grava auditoria.
+ */
+export async function updateEntryClassification(
+  id: string,
+  newClassification: string,
+  oldClassification: string
+) {
+  const supabase = createClient()
+
+  const { error } = await supabase
+    .from('entries')
+    .update({ classification: newClassification })
+    .eq('id', id)
+
+  if (error) throw error
+
+  await logAudit({
+    entity: 'entries',
+    entity_id: id,
+    field: 'classification',
+    old_value: oldClassification,
+    new_value: newClassification,
   })
 
   revalidatePath('/lancamentos')

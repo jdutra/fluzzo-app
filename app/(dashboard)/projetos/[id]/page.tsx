@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import { ProjectSheet } from '@/components/forms/project-sheet'
 import {
   ArrowLeft, Pencil, User, CalendarDays,
@@ -267,7 +266,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
     return (
       <div className="text-center py-16 text-muted-foreground">
         Projeto não encontrado.{' '}
-        <Link href="/projetos" className="text-sky-600 hover:underline">Voltar</Link>
+        <Link href="/projetos" className="text-teal-600 hover:underline">Voltar</Link>
       </div>
     )
   }
@@ -378,7 +377,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-7 text-xs gap-1 text-slate-500 hover:text-sky-700"
+                  className="h-7 text-xs gap-1 text-slate-500 hover:text-teal-700"
                   onClick={() => { setAddingConsultant(!addingConsultant); setNewConsultant(emptyConsultantForm) }}
                 >
                   <Plus size={12} /> Adicionar
@@ -455,7 +454,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                     </Button>
                     <Button
                       size="sm"
-                      className="h-7 text-xs bg-sky-600 hover:bg-sky-700"
+                      className="h-7 text-xs bg-teal-600 hover:bg-teal-700"
                       disabled={!newConsultant.consultant_id || addConsultantMutation.isPending}
                       onClick={() => addConsultantMutation.mutate()}
                     >
@@ -471,7 +470,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                   <div>
                     <p className="font-medium text-slate-800">{c.consultant.name}</p>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500 mt-0.5">
-                      {c.role && <span className="text-sky-600 font-medium">{c.role}</span>}
+                      {c.role && <span className="text-teal-600 font-medium">{c.role}</span>}
                       <span>Fee: {(c.fee_pct * 100).toFixed(1)}%</span>
                       <span>{c.installments}x {formatCurrency(c.monthly_value)}</span>
                       <span className="text-amber-600">Due: {formatCurrency(c.amount_due)}</span>
@@ -503,7 +502,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-7 text-xs gap-1 text-slate-500 hover:text-sky-700"
+                  className="h-7 text-xs gap-1 text-slate-500 hover:text-teal-700"
                   onClick={() => { setAddingPartner(!addingPartner); setNewPartner(emptyPartnerForm) }}
                 >
                   <Plus size={12} /> Adicionar
@@ -559,7 +558,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                     </Button>
                     <Button
                       size="sm"
-                      className="h-7 text-xs bg-sky-600 hover:bg-sky-700"
+                      className="h-7 text-xs bg-teal-600 hover:bg-teal-700"
                       disabled={!newPartner.partner_id || addPartnerMutation.isPending}
                       onClick={() => addPartnerMutation.mutate()}
                     >
@@ -605,7 +604,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                 <CardTitle className="text-base flex items-center gap-2">
                   <Receipt size={16} /> Lançamentos ({entries.length})
                 </CardTitle>
-                <Link href="/lancamentos" className="text-xs text-sky-600 hover:underline">
+                <Link href="/lancamentos" className="text-xs text-teal-600 hover:underline">
                   Ver todos os lançamentos →
                 </Link>
               </div>
@@ -652,7 +651,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  className="h-7 text-xs gap-1 text-slate-500 hover:text-sky-700"
+                                  className="h-7 text-xs gap-1 text-slate-500 hover:text-teal-700"
                                   onClick={() => statusMutation.mutate({ entry, newStatus: nextStatus })}
                                   disabled={statusMutation.isPending}
                                 >
@@ -680,7 +679,6 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         onSuccess={handleProjectUpdated}
       />
 
-      <Toaster />
     </div>
   )
 }

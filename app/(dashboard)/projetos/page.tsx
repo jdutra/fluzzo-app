@@ -10,7 +10,6 @@ import { ProjectSheet } from '@/components/forms/project-sheet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import {
   FolderKanban, MoreHorizontal, Pencil, Trash2, Eye,
 } from 'lucide-react'
@@ -181,7 +180,7 @@ export default function ProjetosPage() {
                     <td className="px-4 py-3">
                       <Link
                         href={`/projetos/${project.id}`}
-                        className="font-mono text-sky-600 hover:text-sky-800 font-medium"
+                        className="font-mono text-teal-600 hover:text-teal-800 font-medium"
                       >
                         #{project.code}
                       </Link>
@@ -257,7 +256,6 @@ export default function ProjetosPage() {
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />
 
-      <Toaster />
     </div>
   )
 }

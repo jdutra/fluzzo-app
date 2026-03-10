@@ -14,7 +14,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import { Loader2 } from 'lucide-react'
 import type { Client } from '@/lib/supabase/types'
 
@@ -272,7 +271,7 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={mutation.isPending} className="bg-sky-600 hover:bg-sky-700">
+              <Button type="submit" disabled={mutation.isPending} className="bg-teal-600 hover:bg-teal-700">
                 {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
                 {isEditing ? 'Salvar alterações' : 'Cadastrar'}
               </Button>
@@ -280,7 +279,6 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
           </form>
         </SheetContent>
       </Sheet>
-      <Toaster />
     </>
   )
 }

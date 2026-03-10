@@ -15,7 +15,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import { Loader2 } from 'lucide-react'
 import type { Project, ProjectStatus } from '@/lib/supabase/types'
 import { createProjectWithEntries, updateProject } from '@/lib/actions/projects'
@@ -93,29 +92,35 @@ export function ProjectSheet({ open, onOpenChange, project, onSuccess }: Project
     defaultValues: { status: 'ativo', revenue: 0, installments: 1 },
   })
 
+  // Popula o form quando abre (ou muda o projeto selecionado)
   useEffect(() => {
-    if (open) {
-      if (project) {
-        reset({
-          client_id: project.client_id ?? '',
-          gp: project.gp ?? '',
-          sale_date: project.sale_date ?? '',
-          billing_start_date: project.billing_start_date ?? '',
-          status: (project.status as ProjectStatus) ?? 'ativo',
-          revenue: project.revenue ?? 0,
-          purchase_order: project.purchase_order ?? '',
-          notes: project.notes ?? '',
-          installments: 1,
-        })
-        setSelectedProducts(existingProductIds)
-      } else {
-        const today = new Date().toISOString().split('T')[0]
-        reset({ status: 'ativo', revenue: 0, installments: 1, sale_date: today })
-        setSelectedProducts([])
-      }
+    if (!open) return
+    if (project) {
+      reset({
+        client_id: project.client_id ?? '',
+        gp: project.gp ?? '',
+        sale_date: project.sale_date ?? '',
+        billing_start_date: project.billing_start_date ?? '',
+        status: (project.status as ProjectStatus) ?? 'ativo',
+        revenue: project.revenue ?? 0,
+        purchase_order: project.purchase_order ?? '',
+        notes: project.notes ?? '',
+        installments: 1,
+      })
+    } else {
+      const today = new Date().toISOString().split('T')[0]
+      reset({ status: 'ativo', revenue: 0, installments: 1, sale_date: today })
+      setSelectedProducts([])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, project, reset, existingProductIds])
+  }, [open, project?.id])
+
+  // Carrega produtos vinculados separadamente
+  useEffect(() => {
+    if (open && project && existingProductIds.length > 0) {
+      setSelectedProducts(existingProductIds)
+    }
+  }, [open, project?.id, existingProductIds])
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -137,7 +142,7 @@ export function ProjectSheet({ open, onOpenChange, project, onSuccess }: Project
         projectId = project.id
       } else {
         const created = await createProjectWithEntries({
-          company_id: company?.id ?? '',
+          company_id: company?.id ?? null,
           client_id: data.client_id || null,
           gp: data.gp || null,
           sale_date: data.sale_date || null,
@@ -153,11 +158,15 @@ export function ProjectSheet({ open, onOpenChange, project, onSuccess }: Project
       }
 
       // Sync project_products
-      await supabase.from('project_products').delete().eq('project_id', projectId)
-      if (selectedProducts.length > 0) {
-        await supabase.from('project_products').insert(
-          selectedProducts.map((pid) => ({ project_id: projectId, product_id: pid }))
-        )
+      try {
+        await supabase.from('project_products').delete().eq('project_id', projectId)
+        if (selectedProducts.length > 0) {
+          await supabase.from('project_products').insert(
+            selectedProducts.map((pid) => ({ project_id: projectId, product_id: pid }))
+          )
+        }
+      } catch {
+        console.warn('project_products sync skipped — migration 007 may not have been applied.')
       }
     },
     onSuccess: () => {
@@ -265,11 +274,11 @@ export function ProjectSheet({ open, onOpenChange, project, onSuccess }: Project
                     <label key={p.id} className="flex items-center gap-2 cursor-pointer text-sm py-0.5">
                       <input
                         type="checkbox"
-                        className="rounded border-slate-300 accent-sky-600"
+                        className="rounded border-slate-300 accent-teal-600"
                         checked={selectedProducts.includes(p.id)}
                         onChange={() => toggleProduct(p.id)}
                       />
-                      <span className="font-semibold text-sky-700 w-8 shrink-0">{p.sigla}</span>
+                      <span className="font-semibold text-teal-700 w-8 shrink-0">{p.sigla}</span>
                       <span className="text-slate-600 text-xs truncate">{p.name}</span>
                     </label>
                   ))}
@@ -285,7 +294,7 @@ export function ProjectSheet({ open, onOpenChange, project, onSuccess }: Project
 
             <SheetFooter className="pt-4 gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" disabled={mutation.isPending} className="bg-sky-600 hover:bg-sky-700">
+              <Button type="submit" disabled={mutation.isPending || (!isEditing && !company?.id)} className="bg-teal-600 hover:bg-teal-700">
                 {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
                 {isEditing ? 'Salvar' : 'Criar Projeto'}
               </Button>
@@ -293,7 +302,6 @@ export function ProjectSheet({ open, onOpenChange, project, onSuccess }: Project
           </form>
         </SheetContent>
       </Sheet>
-      <Toaster />
     </>
   )
 }

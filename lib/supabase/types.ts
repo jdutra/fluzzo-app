@@ -338,7 +338,8 @@ export type VwReceivables = {
 
 export type LeadWithRelations = Lead & {
   client: Pick<Client, 'id' | 'name'> | null
-  product: Pick<Product, 'id' | 'name' | 'sigla'> | null
+  product?: Pick<Product, 'id' | 'name' | 'sigla'> | null
+  lead_products?: { product: Pick<Product, 'id' | 'name' | 'sigla'> | null }[]
   interactions?: LeadInteraction[]
 }
 

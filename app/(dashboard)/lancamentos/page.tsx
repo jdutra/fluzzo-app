@@ -7,9 +7,14 @@ import { PageHeader } from '@/components/shared/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import {
   Receipt, Check, Pencil, X, ChevronLeft, ChevronRight,
 } from 'lucide-react'
@@ -17,8 +22,8 @@ import {
   formatCurrency, formatDate,
   ENTRY_STATUS_LABELS, ENTRY_STATUS_COLORS,
 } from '@/lib/utils'
-import type { Entry, EntryStatus } from '@/lib/supabase/types'
-import { updateEntryStatus, updateEntryAmount } from '@/lib/actions/entries'
+import type { Entry, EntryStatus, Classification } from '@/lib/supabase/types'
+import { updateEntryStatus, updateEntryAmount, updateEntryClassification } from '@/lib/actions/entries'
 import Link from 'next/link'
 
 type EntryWithRelations = Entry & {
@@ -46,11 +51,17 @@ export default function LancamentosPage() {
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1) // 1-12
   const [statusFilter, setStatusFilter] = useState<EntryStatus | 'all'>('all')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState('')
+
+  // Amount editing
+  const [editingAmountId, setEditingAmountId] = useState<string | null>(null)
+  const [editAmountValue, setEditAmountValue] = useState('')
+
+  // Classification editing
+  const [editingClassId, setEditingClassId] = useState<string | null>(null)
 
   const period = `${year}-${String(month).padStart(2, '0')}`
 
+  // ── Queries ────────────────────────────────────────────────────────────
   const { data: entries = [], isLoading } = useQuery<EntryWithRelations[]>({
     queryKey: ['entries', period],
     queryFn: async () => {
@@ -68,6 +79,29 @@ export default function LancamentosPage() {
     },
   })
 
+  const { data: classifications = [] } = useQuery<Classification[]>({
+    queryKey: ['classifications-active'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('classifications')
+        .select('*')
+        .eq('active', true)
+        .in('type', ['entrada', 'ambos'])
+        .order('name')
+      if (error) throw error
+      return (data ?? []) as Classification[]
+    },
+  })
+
+  // Merge saved classification names with any values already on entries
+  const classNames: string[] = Array.from(
+    new Set([
+      ...classifications.map((c) => c.name),
+      ...entries.map((e) => e.classification).filter(Boolean),
+    ])
+  ).sort()
+
+  // ── Mutations ─────────────────────────────────────────────────────────
   const statusMutation = useMutation({
     mutationFn: async ({ entry, newStatus }: { entry: Entry; newStatus: EntryStatus }) => {
       await updateEntryStatus(entry.id, newStatus, entry.status)
@@ -86,11 +120,24 @@ export default function LancamentosPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       toast({ title: 'Valor atualizado.' })
-      setEditingId(null)
+      setEditingAmountId(null)
     },
     onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
   })
 
+  const classMutation = useMutation({
+    mutationFn: async ({ entry, newClass }: { entry: Entry; newClass: string }) => {
+      await updateEntryClassification(entry.id, newClass, entry.classification)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
+      toast({ title: 'Classificação atualizada.' })
+      setEditingClassId(null)
+    },
+    onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
+  })
+
+  // ── Derived ────────────────────────────────────────────────────────────
   const filtered = statusFilter === 'all'
     ? entries
     : entries.filter((e) => e.status === statusFilter)
@@ -105,33 +152,42 @@ export default function LancamentosPage() {
     return acc
   }, {})
 
+  // ── Helpers ────────────────────────────────────────────────────────────
   function prevMonth() {
-    if (month === 1) { setMonth(12); setYear(y => y - 1) }
-    else setMonth(m => m - 1)
+    if (month === 1) { setMonth(12); setYear((y) => y - 1) }
+    else setMonth((m) => m - 1)
   }
 
   function nextMonth() {
-    if (month === 12) { setMonth(1); setYear(y => y + 1) }
-    else setMonth(m => m + 1)
+    if (month === 12) { setMonth(1); setYear((y) => y + 1) }
+    else setMonth((m) => m + 1)
   }
 
-  const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+  const MONTH_NAMES = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+  ]
 
-  function startEdit(entry: Entry) {
-    setEditingId(entry.id)
-    setEditValue(String(entry.amount))
+  function startEditAmount(entry: Entry) {
+    setEditingAmountId(entry.id)
+    setEditAmountValue(String(entry.amount))
+    setEditingClassId(null) // close any open class editor
   }
 
-  function cancelEdit() {
-    setEditingId(null)
-    setEditValue('')
+  function cancelEditAmount() {
+    setEditingAmountId(null)
+    setEditAmountValue('')
   }
 
-  function confirmEdit(entry: Entry) {
-    const val = parseFloat(editValue)
+  function confirmEditAmount(entry: Entry) {
+    const val = parseFloat(editAmountValue)
     if (isNaN(val) || val < 0) return
     amountMutation.mutate({ entry, newAmount: val })
+  }
+
+  function startEditClass(entry: Entry) {
+    setEditingClassId(entry.id)
+    setEditingAmountId(null) // close any open amount editor
   }
 
   return (
@@ -202,7 +258,9 @@ export default function LancamentosPage() {
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center text-slate-400">
             <Receipt size={32} className="mx-auto mb-3 opacity-30" />
-            <p className="font-medium text-slate-600">Nenhum lançamento em {MONTH_NAMES[month - 1]}/{year}</p>
+            <p className="font-medium text-slate-600">
+              Nenhum lançamento em {MONTH_NAMES[month - 1]}/{year}
+            </p>
             <p className="text-sm mt-1">Crie projetos para gerar lançamentos automáticos.</p>
           </div>
         ) : (
@@ -224,15 +282,17 @@ export default function LancamentosPage() {
                 {filtered.map((entry) => {
                   const nextStatus = STATUS_NEXT[entry.status]
                   const nextLabel = STATUS_NEXT_LABEL[entry.status]
-                  const isEditing = editingId === entry.id
+                  const isEditingAmount = editingAmountId === entry.id
+                  const isEditingClass = editingClassId === entry.id
 
                   return (
                     <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
+                      {/* Projeto */}
                       <td className="px-4 py-3">
                         {entry.project ? (
                           <Link
                             href={`/projetos/${entry.project.id}`}
-                            className="font-mono text-sky-600 hover:text-sky-800 font-medium"
+                            className="font-mono text-teal-600 hover:text-teal-800 font-medium"
                           >
                             #{entry.project.code}
                           </Link>
@@ -240,27 +300,79 @@ export default function LancamentosPage() {
                           <span className="text-slate-400">—</span>
                         )}
                       </td>
+
+                      {/* Cliente */}
                       <td className="px-4 py-3 text-slate-700">
                         {entry.client?.name ?? <span className="text-slate-400">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-slate-600 text-xs">{entry.classification}</td>
+
+                      {/* Classificação — inline Select */}
+                      <td className="px-4 py-3">
+                        {isEditingClass ? (
+                          <div className="flex items-center gap-1">
+                            <Select
+                              defaultValue={entry.classification}
+                              onValueChange={(val) => {
+                                classMutation.mutate({ entry, newClass: val })
+                              }}
+                              disabled={classMutation.isPending}
+                            >
+                              <SelectTrigger className="h-7 w-44 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {classNames.map((name) => (
+                                  <SelectItem key={name} value={name} className="text-xs">
+                                    {name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => setEditingClassId(null)}
+                            >
+                              <X size={11} />
+                            </Button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => startEditClass(entry)}
+                            className="text-xs text-slate-600 hover:text-teal-600 transition-colors group flex items-center gap-1"
+                          >
+                            <span>{entry.classification || '—'}</span>
+                            <Pencil size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </button>
+                        )}
+                      </td>
+
+                      {/* Parcela */}
                       <td className="px-4 py-3 text-slate-500 font-mono text-xs">
                         {entry.installment != null ? entry.installment : '—'}
                       </td>
+
+                      {/* Valor — inline Input */}
                       <td className="px-4 py-3 text-right">
-                        {isEditing ? (
+                        {isEditingAmount ? (
                           <div className="flex items-center gap-1 justify-end">
                             <Input
                               type="number"
                               step="0.01"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
+                              value={editAmountValue}
+                              onChange={(e) => setEditAmountValue(e.target.value)}
                               className="h-7 w-28 text-xs text-right"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') confirmEditAmount(entry)
+                                if (e.key === 'Escape') cancelEditAmount()
+                              }}
                             />
                             <Button
                               size="icon"
                               className="h-7 w-7 bg-green-600 hover:bg-green-700"
-                              onClick={() => confirmEdit(entry)}
+                              onClick={() => confirmEditAmount(entry)}
                               disabled={amountMutation.isPending}
                             >
                               <Check size={11} />
@@ -269,35 +381,41 @@ export default function LancamentosPage() {
                               size="icon"
                               variant="outline"
                               className="h-7 w-7"
-                              onClick={cancelEdit}
+                              onClick={cancelEditAmount}
                             >
                               <X size={11} />
                             </Button>
                           </div>
                         ) : (
                           <button
-                            onClick={() => startEdit(entry)}
-                            className="font-medium text-slate-700 hover:text-sky-600 transition-colors group flex items-center gap-1 ml-auto"
+                            onClick={() => startEditAmount(entry)}
+                            className="font-medium text-slate-700 hover:text-teal-600 transition-colors group flex items-center gap-1 ml-auto"
                           >
                             {formatCurrency(entry.amount)}
                             <Pencil size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                           </button>
                         )}
                       </td>
+
+                      {/* Prev. pagamento */}
                       <td className="px-4 py-3 text-slate-500 text-xs">
                         {entry.forecast_payment ? formatDate(entry.forecast_payment) : '—'}
                       </td>
+
+                      {/* Status */}
                       <td className="px-4 py-3">
                         <Badge className={ENTRY_STATUS_COLORS[entry.status]}>
                           {ENTRY_STATUS_LABELS[entry.status]}
                         </Badge>
                       </td>
+
+                      {/* Ação */}
                       <td className="px-4 py-3">
                         {nextStatus && nextLabel && (
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 text-xs gap-1 text-slate-500 hover:text-sky-700 hover:bg-sky-50"
+                            className="h-7 text-xs gap-1 text-slate-500 hover:text-teal-700 hover:bg-teal-50"
                             onClick={() => statusMutation.mutate({ entry, newStatus: nextStatus })}
                             disabled={statusMutation.isPending}
                           >
@@ -315,7 +433,6 @@ export default function LancamentosPage() {
         )}
       </div>
 
-      <Toaster />
     </div>
   )
 }

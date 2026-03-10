@@ -78,18 +78,18 @@ export function Sidebar() {
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          'relative flex flex-col h-full bg-slate-900 text-slate-100 transition-all duration-300',
+          'relative flex flex-col h-full bg-teal-950 text-teal-50 transition-all duration-300',
           collapsed ? 'w-16' : 'w-60'
         )}
       >
         {/* Logo */}
         <div
           className={cn(
-            'flex items-center h-16 px-4 border-b border-slate-700',
+            'flex items-center h-16 px-4 border-b border-teal-800',
             collapsed ? 'justify-center' : 'gap-3'
           )}
         >
-          <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center font-bold text-white text-sm">
+          <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center font-bold text-white text-sm">
             F
           </div>
           {!collapsed && (
@@ -104,7 +104,7 @@ export function Sidebar() {
             return (
               <div key={group} className="mb-4">
                 {!collapsed && (
-                  <p className="px-3 mb-1 text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <p className="px-3 mb-1 text-xs font-medium text-teal-400 uppercase tracking-wider">
                     {group}
                   </p>
                 )}
@@ -126,8 +126,8 @@ export function Sidebar() {
                                 className={cn(
                                   'flex items-center justify-center w-full h-10 rounded-md transition-colors',
                                   isActive
-                                    ? 'bg-sky-600 text-white'
-                                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                                    ? 'bg-teal-600 text-white'
+                                    : 'text-teal-200 hover:bg-teal-800 hover:text-white'
                                 )}
                               >
                                 <Icon size={18} />
@@ -143,8 +143,8 @@ export function Sidebar() {
                             className={cn(
                               'flex items-center gap-3 px-3 h-10 rounded-md text-sm transition-colors',
                               isActive
-                                ? 'bg-sky-600 text-white font-medium'
-                                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                                ? 'bg-teal-600 text-white font-medium'
+                                : 'text-teal-200 hover:bg-teal-800 hover:text-white'
                             )}
                           >
                             <Icon size={16} className="flex-shrink-0" />
@@ -161,13 +161,13 @@ export function Sidebar() {
         </nav>
 
         {/* Sign out */}
-        <div className="border-t border-slate-700 p-2">
+        <div className="border-t border-teal-800 p-2">
           {collapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   onClick={handleSignOut}
-                  className="flex items-center justify-center w-full h-10 rounded-md text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors"
+                  className="flex items-center justify-center w-full h-10 rounded-md text-teal-200 hover:bg-teal-800 hover:text-red-300 transition-colors"
                 >
                   <LogOut size={18} />
                 </button>
@@ -177,7 +177,7 @@ export function Sidebar() {
           ) : (
             <button
               onClick={handleSignOut}
-              className="flex items-center gap-3 px-3 h-10 w-full rounded-md text-sm text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors"
+              className="flex items-center gap-3 px-3 h-10 w-full rounded-md text-sm text-teal-200 hover:bg-teal-800 hover:text-red-300 transition-colors"
             >
               <LogOut size={16} />
               <span>Sair</span>
@@ -188,7 +188,7 @@ export function Sidebar() {
         {/* Collapse toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-300 hover:bg-slate-600 transition-colors z-10"
+          className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-teal-700 border border-teal-600 flex items-center justify-center text-teal-100 hover:bg-teal-600 transition-colors z-10"
         >
           {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
         </button>

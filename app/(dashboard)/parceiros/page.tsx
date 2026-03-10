@@ -9,7 +9,6 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { PartnerSheet } from '@/components/forms/partner-sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Toaster } from '@/components/ui/toaster'
 import { toast } from '@/components/ui/use-toast'
 import { formatCurrency, formatPercent } from '@/lib/utils'
 import { Handshake, Pencil, Trash2, Search, Mail, Phone } from 'lucide-react'
@@ -99,7 +98,7 @@ export default function ParceirosPage() {
                   <td className="px-4 py-3 hidden xl:table-cell">
                     <div className="space-y-0.5">
                       {p.email && (
-                        <a href={`mailto:${p.email}`} className="flex items-center gap-1 text-sky-600 hover:underline text-xs">
+                        <a href={`mailto:${p.email}`} className="flex items-center gap-1 text-teal-600 hover:underline text-xs">
                           <Mail size={11} />{p.email}
                         </a>
                       )}
@@ -155,7 +154,6 @@ export default function ParceirosPage() {
         description={`Tem certeza que deseja excluir "${deleteTarget?.name}"?`}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} />
 
-      <Toaster />
     </div>
   )
 }

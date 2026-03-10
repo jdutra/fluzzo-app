@@ -12,7 +12,6 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
 } from '@/components/ui/sheet'
@@ -181,7 +180,7 @@ export default function FluxoPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <PageHeader title="Fluxo de Caixa" description="Projeção mensal de receitas e saídas" />
-        <Button size="sm" onClick={openManualSheet} className="bg-sky-600 hover:bg-sky-700 gap-2">
+        <Button size="sm" onClick={openManualSheet} className="bg-teal-600 hover:bg-teal-700 gap-2">
           <Plus size={14} /> Lançamento manual
         </Button>
       </div>
@@ -211,7 +210,7 @@ export default function FluxoPage() {
         <Card>
           <CardContent className="pt-5">
             <div className="flex items-center gap-2 mb-1">
-              <TrendingUp size={16} className="text-sky-500" />
+              <TrendingUp size={16} className="text-teal-500" />
               <p className="text-sm text-slate-500">Efetivamente pago</p>
             </div>
             <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalRecebido)}</p>
@@ -284,7 +283,7 @@ export default function FluxoPage() {
                       {MONTH_NAMES_FULL[monthlyData.indexOf(row)]} {year}
                     </td>
                     <td className="px-4 py-2.5 text-right text-slate-600">{formatCurrency(row.receita)}</td>
-                    <td className="px-4 py-2.5 text-right text-sky-700">{formatCurrency(row.recebido)}</td>
+                    <td className="px-4 py-2.5 text-right text-teal-700">{formatCurrency(row.recebido)}</td>
                     <td className="px-4 py-2.5 text-right text-red-500">{formatCurrency(row.saida)}</td>
                     <td className={`px-4 py-2.5 text-right font-medium ${row.saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {formatCurrency(row.saldo)}
@@ -388,7 +387,7 @@ export default function FluxoPage() {
             </div>
             <SheetFooter className="pt-4 gap-2">
               <Button type="button" variant="outline" onClick={() => setManualSheetOpen(false)}>Cancelar</Button>
-              <Button type="submit" disabled={manualMutation.isPending} className="bg-sky-600 hover:bg-sky-700">
+              <Button type="submit" disabled={manualMutation.isPending} className="bg-teal-600 hover:bg-teal-700">
                 {manualMutation.isPending && <Loader2 size={14} className="animate-spin" />}
                 Criar
               </Button>
@@ -407,7 +406,6 @@ export default function FluxoPage() {
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />
 
-      <Toaster />
     </div>
   )
 }

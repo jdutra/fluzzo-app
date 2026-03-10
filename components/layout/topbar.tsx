@@ -59,7 +59,7 @@ export function Topbar({ title }: TopbarProps) {
           />
           <Input
             placeholder="Buscar..."
-            className="pl-9 h-9 bg-slate-50 border-slate-200 text-sm focus-visible:ring-sky-500"
+            className="pl-9 h-9 bg-slate-50 border-slate-200 text-sm focus-visible:ring-teal-500"
           />
         </div>
       </div>
@@ -73,8 +73,8 @@ export function Topbar({ title }: TopbarProps) {
         {/* User menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2">
-              <div className="w-8 h-8 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-semibold">
+            <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2">
+              <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xs font-semibold">
                 {getInitials(userName)}
               </div>
             </button>

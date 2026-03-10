@@ -72,11 +72,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-sky-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-teal-900 p-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center font-bold text-white text-lg shadow-lg">
+          <div className="w-10 h-10 rounded-xl bg-teal-500 flex items-center justify-center font-bold text-white text-lg shadow-lg">
             F
           </div>
           <span className="font-bold text-2xl text-white tracking-tight">
@@ -162,7 +162,7 @@ export default function LoginPage() {
 
                 <Button
                   type="submit"
-                  className="w-full h-10 bg-sky-600 hover:bg-sky-700"
+                  className="w-full h-10 bg-teal-600 hover:bg-teal-700"
                   disabled={loading}
                 >
                   {loading && <Loader2 size={16} className="mr-2 animate-spin" />}

@@ -15,7 +15,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import { Loader2 } from 'lucide-react'
 import type { LeadInteraction, InteractionType } from '@/lib/supabase/types'
 
@@ -141,7 +140,7 @@ export function InteractionSheet({ open, onOpenChange, leadId, interaction, onSu
 
             <SheetFooter className="pt-4 gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" disabled={mutation.isPending} className="bg-sky-600 hover:bg-sky-700">
+              <Button type="submit" disabled={mutation.isPending} className="bg-teal-600 hover:bg-teal-700">
                 {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
                 {isEditing ? 'Salvar' : 'Registrar'}
               </Button>
@@ -149,7 +148,6 @@ export function InteractionSheet({ open, onOpenChange, leadId, interaction, onSu
           </form>
         </SheetContent>
       </Sheet>
-      <Toaster />
     </>
   )
 }

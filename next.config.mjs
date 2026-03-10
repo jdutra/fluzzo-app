@@ -7,12 +7,8 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  experimental: {
-    serverActions: {
-      // Permite Server Actions de localhost, Vercel e domínio customizado
-      allowedOrigins: ['localhost:3000', '*.vercel.app'],
-    },
-  },
+  // Server Actions — sem restrição de origin (compatível com Vercel, localhost e domínio customizado)
+  serverExternalPackages: [],
 }
 
 export default nextConfig

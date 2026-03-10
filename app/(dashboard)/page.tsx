@@ -110,7 +110,7 @@ export default async function DashboardPage() {
           title="Leads Ativos"
           value={String(activeLeads ?? 0)}
           description="No pipeline"
-          icon={<TrendingUp size={18} className="text-sky-600" />}
+          icon={<TrendingUp size={18} className="text-teal-600" />}
           href="/leads"
           color="sky"
         />
@@ -171,7 +171,7 @@ export default async function DashboardPage() {
               </div>
               <Link
                 href="/lancamentos"
-                className="text-xs text-sky-600 hover:underline flex items-center gap-1"
+                className="text-xs text-teal-600 hover:underline flex items-center gap-1"
               >
                 Ver todos <ArrowUpRight size={12} />
               </Link>
@@ -267,7 +267,7 @@ interface KpiCardProps {
 
 function KpiCard({ title, value, description, icon, href, color }: KpiCardProps) {
   const bgMap = {
-    sky: 'bg-sky-50',
+    sky: 'bg-teal-50',
     violet: 'bg-violet-50',
     emerald: 'bg-emerald-50',
     orange: 'bg-orange-50',
@@ -301,7 +301,7 @@ function EmptyState({ message, href }: { message: string; href: string }) {
       <p className="text-sm text-muted-foreground">{message}</p>
       <Link
         href={href}
-        className="text-xs text-sky-600 hover:underline mt-2"
+        className="text-xs text-teal-600 hover:underline mt-2"
       >
         Adicionar agora
       </Link>

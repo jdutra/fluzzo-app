@@ -15,7 +15,6 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
 } from '@/components/ui/sheet'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import { Loader2, Tag, Pencil, Trash2, MoreHorizontal } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -317,7 +316,7 @@ export default function ClassificacoesPage() {
           <SheetFooter className="pt-6 gap-2">
             <Button variant="outline" onClick={() => setSheetOpen(false)}>Cancelar</Button>
             <Button
-              className="bg-sky-600 hover:bg-sky-700"
+              className="bg-teal-600 hover:bg-teal-700"
               disabled={!form.name.trim() || saveMutation.isPending}
               onClick={() => saveMutation.mutate()}
             >
@@ -338,7 +337,6 @@ export default function ClassificacoesPage() {
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />
 
-      <Toaster />
     </div>
   )
 }

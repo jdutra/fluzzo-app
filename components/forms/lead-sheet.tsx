@@ -15,7 +15,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import { Loader2, Check } from 'lucide-react'
 import type { Lead } from '@/lib/supabase/types'
 import { LEAD_STAGE_LABELS } from '@/lib/utils'
@@ -105,30 +104,35 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
   })
 
   const watchedStage = watch('stage')
-  const watchedResponsible = watch('responsible') ?? ''
 
+  // Popula o form quando abre (ou muda o lead selecionado)
   useEffect(() => {
-    if (open) {
-      if (lead) {
-        reset({
-          title: lead.title,
-          client_id: lead.client_id ?? '',
-          estimated_value: lead.estimated_value ?? undefined,
-          stage: (lead.stage as typeof STAGES[number]) ?? 'qualificacao',
-          responsible: lead.responsible ?? '',
-          notes: lead.notes ?? '',
-          next_step: lead.next_step ?? '',
-          next_step_date: lead.next_step_date ?? '',
-          lost_reason: lead.lost_reason ?? '',
-        })
-        setSelectedProducts(leadProductIds)
-      } else {
-        reset({ stage: 'qualificacao' })
-        setSelectedProducts([])
-      }
+    if (!open) return
+    if (lead) {
+      reset({
+        title: lead.title,
+        client_id: lead.client_id ?? '',
+        estimated_value: lead.estimated_value ?? undefined,
+        stage: (lead.stage as typeof STAGES[number]) ?? 'qualificacao',
+        responsible: lead.responsible ?? '',
+        notes: lead.notes ?? '',
+        next_step: lead.next_step ?? '',
+        next_step_date: lead.next_step_date ?? '',
+        lost_reason: lead.lost_reason ?? '',
+      })
+    } else {
+      reset({ stage: 'qualificacao' })
+      setSelectedProducts([])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, lead, reset, leadProductIds])
+  }, [open, lead?.id])
+
+  // Carrega produtos vinculados separadamente (não interfere no reset do form)
+  useEffect(() => {
+    if (open && lead && leadProductIds.length > 0) {
+      setSelectedProducts(leadProductIds)
+    }
+  }, [open, lead?.id, leadProductIds])
 
   function toggleProduct(id: string) {
     setSelectedProducts((prev) =>
@@ -160,15 +164,21 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
       } else {
         const { data: inserted, error } = await supabase.from('leads').insert(payload).select('id').single()
         if (error) throw error
+        if (!inserted?.id) throw new Error('Falha ao obter ID do lead criado.')
         leadId = inserted.id
       }
 
-      // Sincronizar lead_products
-      await supabase.from('lead_products').delete().eq('lead_id', leadId)
-      if (selectedProducts.length > 0) {
-        await supabase.from('lead_products').insert(
-          selectedProducts.map((pid) => ({ lead_id: leadId, product_id: pid }))
-        )
+      // Sincronizar lead_products (tabela opcional — requer migration 006)
+      try {
+        await supabase.from('lead_products').delete().eq('lead_id', leadId)
+        if (selectedProducts.length > 0) {
+          await supabase.from('lead_products').insert(
+            selectedProducts.map((pid) => ({ lead_id: leadId, product_id: pid }))
+          )
+        }
+      } catch {
+        // lead_products pode não existir ainda (migration 006 pendente)
+        console.warn('lead_products sync skipped — migration 006 may not have been applied.')
       }
     },
     onSuccess: () => {
@@ -223,12 +233,12 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
                       onClick={() => toggleProduct(p.id)}
                       className={cn(
                         'flex items-center gap-2 w-full px-3 py-2 text-sm text-left transition-colors',
-                        checked ? 'bg-sky-50' : 'hover:bg-slate-50'
+                        checked ? 'bg-teal-50' : 'hover:bg-slate-50'
                       )}
                     >
                       <span className={cn(
                         'flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center',
-                        checked ? 'bg-sky-600 border-sky-600' : 'border-slate-300'
+                        checked ? 'bg-teal-600 border-teal-600' : 'border-slate-300'
                       )}>
                         {checked && <Check size={10} className="text-white" />}
                       </span>
@@ -274,8 +284,6 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
                 list="responsible-suggestions"
                 {...register('responsible')}
                 placeholder="Nome do responsável"
-                value={watchedResponsible}
-                onChange={(e) => setValue('responsible', e.target.value)}
               />
               {responsibleSuggestions.length > 0 && (
                 <datalist id="responsible-suggestions">
@@ -315,7 +323,7 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
 
             <SheetFooter className="pt-4 gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" disabled={mutation.isPending} className="bg-sky-600 hover:bg-sky-700">
+              <Button type="submit" disabled={mutation.isPending} className="bg-teal-600 hover:bg-teal-700">
                 {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
                 {isEditing ? 'Salvar' : 'Cadastrar'}
               </Button>
@@ -323,7 +331,6 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
           </form>
         </SheetContent>
       </Sheet>
-      <Toaster />
     </>
   )
 }

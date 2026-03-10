@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import {
   UploadCloud, FileSpreadsheet, CheckCircle2, XCircle,
   AlertTriangle, Loader2, ChevronRight, ArrowLeft, Users,
@@ -341,7 +340,7 @@ export default function ImportarPage() {
           return (
             <span key={s} className="flex items-center gap-1">
               <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                active ? 'bg-sky-600 text-white' :
+                active ? 'bg-teal-600 text-white' :
                 done ? 'bg-green-100 text-green-700' :
                 'bg-slate-100 text-slate-400'
               }`}>
@@ -363,14 +362,14 @@ export default function ImportarPage() {
             onClick={() => fileInputRef.current?.click()}
             className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed cursor-pointer transition-all p-14
               ${dragOver
-                ? 'border-sky-400 bg-sky-50'
-                : 'border-slate-300 bg-white hover:border-sky-300 hover:bg-slate-50'
+                ? 'border-teal-400 bg-teal-50'
+                : 'border-slate-300 bg-white hover:border-teal-300 hover:bg-slate-50'
               }`}
           >
             {parsing ? (
-              <Loader2 size={36} className="text-sky-500 animate-spin" />
+              <Loader2 size={36} className="text-teal-500 animate-spin" />
             ) : (
-              <UploadCloud size={40} className={dragOver ? 'text-sky-500' : 'text-slate-300'} />
+              <UploadCloud size={40} className={dragOver ? 'text-teal-500' : 'text-slate-300'} />
             )}
             <div className="text-center">
               <p className="font-medium text-slate-700">
@@ -435,7 +434,7 @@ export default function ImportarPage() {
                     count === 0
                       ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
                       : selected
-                      ? 'border-sky-400 bg-sky-50 text-sky-700'
+                      ? 'border-teal-400 bg-teal-50 text-teal-700'
                       : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
                   }`}
                 >
@@ -445,7 +444,7 @@ export default function ImportarPage() {
                     {count} registros
                   </span>
                   {selected && count > 0 && (
-                    <CheckCircle2 size={12} className="text-sky-500" />
+                    <CheckCircle2 size={12} className="text-teal-500" />
                   )}
                 </button>
               )
@@ -489,7 +488,7 @@ export default function ImportarPage() {
             <Button
               onClick={handleImport}
               disabled={importing || selectedEntities.size === 0}
-              className="bg-sky-600 hover:bg-sky-700 gap-2"
+              className="bg-teal-600 hover:bg-teal-700 gap-2"
             >
               {importing && <Loader2 size={14} className="animate-spin" />}
               {importing ? 'Importando…' : 'Importar dados'}
@@ -566,7 +565,6 @@ export default function ImportarPage() {
         </div>
       )}
 
-      <Toaster />
     </div>
   )
 }

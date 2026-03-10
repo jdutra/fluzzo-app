@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import { Loader2 } from 'lucide-react'
 import type { Partner } from '@/lib/supabase/types'
 
@@ -154,7 +153,7 @@ export function PartnerSheet({ open, onOpenChange, partner, onSuccess }: Partner
 
             <SheetFooter className="pt-4 gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" disabled={mutation.isPending} className="bg-sky-600 hover:bg-sky-700">
+              <Button type="submit" disabled={mutation.isPending} className="bg-teal-600 hover:bg-teal-700">
                 {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
                 {isEditing ? 'Salvar' : 'Cadastrar'}
               </Button>
@@ -162,7 +161,6 @@ export function PartnerSheet({ open, onOpenChange, partner, onSuccess }: Partner
           </form>
         </SheetContent>
       </Sheet>
-      <Toaster />
     </>
   )
 }

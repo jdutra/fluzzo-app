@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Toaster } from '@/components/ui/toaster'
 import { toast } from '@/components/ui/use-toast'
 import { Loader2, Building2, Save, CheckCircle2, Plus, Trash2, Mail, Phone, User } from 'lucide-react'
 import { formatCNPJ } from '@/lib/utils'
@@ -272,7 +271,7 @@ export default function EmpresaPage() {
           </CardContent>
         </Card>
 
-        <Button type="submit" disabled={mutation.isPending} className="bg-sky-600 hover:bg-sky-700">
+        <Button type="submit" disabled={mutation.isPending} className="bg-teal-600 hover:bg-teal-700">
           {mutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
           Salvar alterações
         </Button>
@@ -325,7 +324,7 @@ export default function EmpresaPage() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button type="button" variant="ghost" size="sm" onClick={() => setAddingContact(false)}>Cancelar</Button>
-                  <Button type="submit" size="sm" disabled={addContactMutation.isPending} className="bg-sky-600 hover:bg-sky-700">
+                  <Button type="submit" size="sm" disabled={addContactMutation.isPending} className="bg-teal-600 hover:bg-teal-700">
                     {addContactMutation.isPending && <Loader2 size={12} className="animate-spin" />}
                     Adicionar
                   </Button>
@@ -347,7 +346,7 @@ export default function EmpresaPage() {
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-slate-800 text-sm">{c.name}</p>
                       {c.is_primary && (
-                        <span className="text-xs bg-sky-50 text-sky-700 border border-sky-200 px-1.5 py-0.5 rounded-full">
+                        <span className="text-xs bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded-full">
                           Principal
                         </span>
                       )}
@@ -355,7 +354,7 @@ export default function EmpresaPage() {
                     </div>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
                       {c.email && (
-                        <a href={`mailto:${c.email}`} className="flex items-center gap-1 text-xs text-sky-600 hover:underline">
+                        <a href={`mailto:${c.email}`} className="flex items-center gap-1 text-xs text-teal-600 hover:underline">
                           <Mail size={10} />{c.email}
                         </a>
                       )}
@@ -377,7 +376,6 @@ export default function EmpresaPage() {
         </Card>
       )}
 
-      <Toaster />
     </div>
   )
 }

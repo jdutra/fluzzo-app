@@ -10,7 +10,6 @@ import { LeadSheet } from '@/components/forms/lead-sheet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import {
   TrendingUp, MoreHorizontal, Pencil, Trash2, Eye,
   ArrowRightCircle, AlertTriangle, LayoutGrid, List, CalendarClock,
@@ -61,12 +60,22 @@ export default function LeadsPage() {
 
   const { data: leads = [], isLoading } = useQuery<LeadWithRelations[]>({
     queryKey: ['leads'],
+    throwOnError: false,
+    retry: 1,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('leads')
         .select('*, client:clients(id, name), lead_products(product:products(id, name, sigla))')
         .order('updated_at', { ascending: false })
-      if (error) throw error
+      if (error) {
+        // Fallback sem lead_products (migration 006 pode não ter sido aplicada)
+        const { data: fallback, error: err2 } = await supabase
+          .from('leads')
+          .select('*, client:clients(id, name)')
+          .order('updated_at', { ascending: false })
+        if (err2) throw err2
+        return (fallback ?? []).map((l) => ({ ...l, lead_products: [] })) as LeadWithRelations[]
+      }
       return (data ?? []) as LeadWithRelations[]
     },
   })
@@ -118,7 +127,7 @@ export default function LeadsPage() {
   }, {})
 
   function openCreate() { setSelectedLead(null); setSheetOpen(true) }
-  function openEdit(lead: Lead) { setSelectedLead(lead); setSheetOpen(true) }
+  function openEdit(lead: LeadWithRelations) { setSelectedLead(lead); setSheetOpen(true) }
   function handleRefresh() { queryClient.invalidateQueries({ queryKey: ['leads'] }); setSheetOpen(false) }
 
   return (
@@ -155,11 +164,11 @@ export default function LeadsPage() {
           </button>
           <button
             onClick={() => setViewMode('followup')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'followup' ? 'bg-sky-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'followup' ? 'bg-teal-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
           >
             <CalendarClock size={13} /> Follow-up
             {followupLeads.length > 0 && (
-              <span className={`ml-1 px-1.5 py-0 rounded-full text-[10px] font-bold ${viewMode === 'followup' ? 'bg-white text-sky-700' : 'bg-orange-100 text-orange-700'}`}>
+              <span className={`ml-1 px-1.5 py-0 rounded-full text-[10px] font-bold ${viewMode === 'followup' ? 'bg-white text-teal-700' : 'bg-orange-100 text-orange-700'}`}>
                 {followupLeads.length}
               </span>
             )}
@@ -303,7 +312,7 @@ export default function LeadsPage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             {isStale && <AlertTriangle size={13} className="text-orange-500 flex-shrink-0" />}
-                            <Link href={`/leads/${lead.id}`} className="font-medium text-slate-900 hover:text-sky-600 truncate max-w-[180px]">
+                            <Link href={`/leads/${lead.id}`} className="font-medium text-slate-900 hover:text-teal-600 truncate max-w-[180px]">
                               {lead.title}
                             </Link>
                             {lead.converted_project_id && (
@@ -371,7 +380,7 @@ export default function LeadsPage() {
                               {canConvert && (
                                 <>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => setConvertTarget(lead)} className="gap-2 text-sky-600 focus:text-sky-700">
+                                  <DropdownMenuItem onClick={() => setConvertTarget(lead)} className="gap-2 text-teal-600 focus:text-teal-700">
                                     <ArrowRightCircle size={14} /> Converter em projeto
                                   </DropdownMenuItem>
                                 </>
@@ -407,7 +416,6 @@ export default function LeadsPage() {
         confirmLabel="Converter" loading={convertMutation.isPending}
         onConfirm={() => convertTarget && convertMutation.mutate(convertTarget.id)} />
 
-      <Toaster />
     </div>
   )
 }

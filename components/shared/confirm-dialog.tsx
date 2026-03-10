@@ -39,7 +39,7 @@ export function ConfirmDialog({
             variant={variant}
             onClick={onConfirm}
             disabled={loading}
-            className={variant === 'destructive' ? '' : 'bg-sky-600 hover:bg-sky-700'}
+            className={variant === 'destructive' ? '' : 'bg-teal-600 hover:bg-teal-700'}
           >
             {loading && <Loader2 size={14} className="animate-spin" />}
             {confirmLabel}

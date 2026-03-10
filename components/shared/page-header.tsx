@@ -20,7 +20,7 @@ export function PageHeader({ title, description, action }: PageHeaderProps) {
         )}
       </div>
       {action && (
-        <Button onClick={action.onClick} className="bg-sky-600 hover:bg-sky-700">
+        <Button onClick={action.onClick} className="bg-teal-600 hover:bg-teal-700">
           <Plus size={16} />
           {action.label}
         </Button>

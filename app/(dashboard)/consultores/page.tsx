@@ -10,7 +10,6 @@ import { ConsultantSheet } from '@/components/forms/consultant-sheet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Toaster } from '@/components/ui/toaster'
 import { toast } from '@/components/ui/use-toast'
 import { formatCurrency } from '@/lib/utils'
 import { UserCheck, Pencil, Trash2, Search, Mail, Phone } from 'lucide-react'
@@ -94,7 +93,7 @@ export default function ConsultoresPage() {
                   <td className="px-4 py-3 hidden lg:table-cell">
                     <div className="space-y-0.5">
                       {c.email && (
-                        <a href={`mailto:${c.email}`} className="flex items-center gap-1 text-xs text-sky-600 hover:underline">
+                        <a href={`mailto:${c.email}`} className="flex items-center gap-1 text-xs text-teal-600 hover:underline">
                           <Mail size={11} />{c.email}
                         </a>
                       )}
@@ -146,7 +145,6 @@ export default function ConsultoresPage() {
         description={`Tem certeza que deseja excluir "${deleteTarget?.name}"?`}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} />
 
-      <Toaster />
     </div>
   )
 }

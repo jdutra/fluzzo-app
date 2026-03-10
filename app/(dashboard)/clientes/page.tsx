@@ -10,7 +10,6 @@ import { ClientSheet } from '@/components/forms/client-sheet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Toaster } from '@/components/ui/toaster'
 import { toast } from '@/components/ui/use-toast'
 import { formatDate } from '@/lib/utils'
 import { Users, Pencil, Trash2, Search } from 'lucide-react'
@@ -133,7 +132,6 @@ export default function ClientesPage() {
         description={`Tem certeza que deseja excluir "${deleteTarget?.name}"? Esta ação não pode ser desfeita.`}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} />
 
-      <Toaster />
     </div>
   )
 }

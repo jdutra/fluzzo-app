@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/use-toast'
-import { Toaster } from '@/components/ui/toaster'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { LeadSheet } from '@/components/forms/lead-sheet'
 import { InteractionSheet } from '@/components/forms/interaction-sheet'
@@ -156,7 +155,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
     return (
       <div className="text-center py-16 text-muted-foreground">
         Lead não encontrado.{' '}
-        <Link href="/leads" className="text-sky-600 hover:underline">Voltar</Link>
+        <Link href="/leads" className="text-teal-600 hover:underline">Voltar</Link>
       </div>
     )
   }
@@ -184,7 +183,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
             <Button
               size="sm"
               onClick={() => setConvertConfirmOpen(true)}
-              className="bg-sky-600 hover:bg-sky-700 gap-2"
+              className="bg-teal-600 hover:bg-teal-700 gap-2"
             >
               <ArrowRightCircle size={14} />
               Converter em projeto
@@ -301,7 +300,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Histórico de interações</CardTitle>
-                <Button size="sm" onClick={openAddInteraction} className="bg-sky-600 hover:bg-sky-700 gap-2">
+                <Button size="sm" onClick={openAddInteraction} className="bg-teal-600 hover:bg-teal-700 gap-2">
                   <MessageSquarePlus size={14} />
                   Registrar
                 </Button>
@@ -319,7 +318,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                   <MessageSquarePlus size={32} className="mb-3 opacity-30" />
                   <p className="font-medium text-slate-600">Nenhuma interação registrada</p>
                   <p className="text-sm mt-1">Registre a primeira interação com este lead.</p>
-                  <Button size="sm" onClick={openAddInteraction} className="mt-4 bg-sky-600 hover:bg-sky-700">
+                  <Button size="sm" onClick={openAddInteraction} className="mt-4 bg-teal-600 hover:bg-teal-700">
                     Registrar interação
                   </Button>
                 </div>
@@ -428,7 +427,6 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
         onConfirm={() => deleteInteractionTarget && deleteInteractionMutation.mutate(deleteInteractionTarget.id)}
       />
 
-      <Toaster />
     </div>
   )
 }

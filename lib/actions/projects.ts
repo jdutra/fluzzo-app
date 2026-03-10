@@ -10,7 +10,7 @@ import type { ProjectStatus } from '@/lib/supabase/types'
  * Regra #5: Ao criar projeto com N parcelas, gerar N entries previstas.
  */
 export async function createProjectWithEntries(params: {
-  company_id: string
+  company_id: string | null
   client_id: string | null
   gp: string | null
   sale_date: string | null
@@ -56,6 +56,7 @@ export async function createProjectWithEntries(params: {
       client_id: projectData.client_id,
       revenue: projectData.revenue,
       installments,
+      billing_start_date: projectData.billing_start_date,
     })
   }
 
