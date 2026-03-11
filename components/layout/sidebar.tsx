@@ -92,7 +92,7 @@ export function Sidebar() {
         >
           <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden">
             <Image
-              src="/logo-zeppelin.png"
+              src="/logo_zeppelin.jpeg"
               alt="Zeppelin"
               width={32}
               height={32}
