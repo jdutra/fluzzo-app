@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
@@ -89,8 +90,14 @@ export function Sidebar() {
             collapsed ? 'justify-center' : 'gap-3'
           )}
         >
-          <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center font-bold text-white text-sm">
-            F
+          <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden">
+            <Image
+              src="/logo-zeppelin.png"
+              alt="Zeppelin"
+              width={32}
+              height={32}
+              className="w-full h-full object-cover"
+            />
           </div>
           {!collapsed && (
             <span className="font-semibold text-lg tracking-tight">Fluzzo</span>
