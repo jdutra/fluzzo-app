@@ -35,6 +35,7 @@ const ALL_STAGES: LeadStage[] = [
   'qualificacao', 'diagnostico', 'proposta', 'negociacao', 'fechado', 'perdido',
 ]
 const ACTIVE_STAGES: LeadStage[] = ['qualificacao', 'diagnostico', 'proposta', 'negociacao']
+const FINAL_STAGES: LeadStage[] = ['fechado', 'perdido']
 
 const STALE_DAYS = 7
 
@@ -43,9 +44,88 @@ const KANBAN_COLORS: Record<string, string> = {
   diagnostico: 'border-t-blue-400',
   proposta: 'border-t-yellow-400',
   negociacao: 'border-t-orange-400',
+  fechado: 'border-t-green-500',
+  perdido: 'border-t-red-400',
 }
 
 type ViewMode = 'list' | 'kanban' | 'followup'
+
+// ─── Kanban Column ─────────────────────────────────────────────────────────
+
+function KanbanColumn({
+  stage, stageLeads, today, onEdit, isFinal = false,
+}: {
+  stage: LeadStage
+  stageLeads: LeadWithRelations[]
+  today: string
+  onEdit: (lead: LeadWithRelations) => void
+  isFinal?: boolean
+}) {
+  const bgCard = isFinal ? 'bg-slate-50' : 'bg-white'
+  return (
+    <div className="flex-shrink-0 w-72">
+      <div className={`${bgCard} rounded-lg border border-t-4 ${KANBAN_COLORS[stage]} shadow-sm`}>
+        <div className="flex items-center justify-between px-3 py-2.5 border-b">
+          <span className="text-sm font-medium text-slate-700">{LEAD_STAGE_LABELS[stage]}</span>
+          <span className={`text-xs px-2 py-0.5 rounded-full ${
+            stage === 'fechado' ? 'bg-green-100 text-green-600' :
+            stage === 'perdido' ? 'bg-red-100 text-red-500' :
+            'bg-slate-100 text-slate-500'
+          }`}>{stageLeads.length}</span>
+        </div>
+        <div className="p-2 space-y-2 min-h-[200px] max-h-[calc(100vh-280px)] overflow-y-auto">
+          {stageLeads.length === 0 && (
+            <p className="text-xs text-slate-400 text-center py-6">Nenhum lead</p>
+          )}
+          {stageLeads.map((lead) => {
+            const isStale = !isFinal && daysSince(lead.updated_at) > STALE_DAYS
+            return (
+              <div key={lead.id}
+                className={`rounded-md border p-2.5 text-sm hover:shadow-sm transition-shadow cursor-pointer ${
+                  isStale ? 'border-orange-200 bg-orange-50/50' :
+                  stage === 'fechado' ? 'border-green-200 bg-white' :
+                  stage === 'perdido' ? 'border-red-100 bg-white' :
+                  'border-slate-200 bg-white'
+                }`}
+                onClick={() => onEdit(lead)}
+              >
+                <div className="flex items-start gap-1.5 mb-1">
+                  {isStale && <AlertTriangle size={12} className="text-orange-500 mt-0.5 flex-shrink-0" />}
+                  <p className="font-medium text-slate-800 leading-tight text-sm">{lead.title}</p>
+                </div>
+                {lead.client && (
+                  <p className="text-xs text-slate-500 mb-1.5">{lead.client.name}</p>
+                )}
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  {(lead.lead_products ?? []).map((lp) => lp.product && (
+                    <span key={lp.product.id} className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
+                      {lp.product.sigla}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between">
+                  {lead.estimated_value != null ? (
+                    <span className="text-xs font-semibold text-slate-700">
+                      {formatCurrencyCompact(lead.estimated_value)}
+                    </span>
+                  ) : <span />}
+                  {lead.next_step_date && !isFinal && (
+                    <span className={`text-[10px] ${lead.next_step_date <= today ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
+                      📅 {formatDate(lead.next_step_date)}
+                    </span>
+                  )}
+                </div>
+                {lead.responsible && (
+                  <p className="text-[10px] text-slate-400 mt-1">👤 {lead.responsible}</p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function LeadsPage() {
   const supabase = createClient()
@@ -209,61 +289,37 @@ export default function LeadsPage() {
       {/* KANBAN VIEW */}
       {viewMode === 'kanban' && !isLoading && (
         <div className="flex gap-4 overflow-x-auto pb-4">
+          {/* Estágios ativos */}
           {ACTIVE_STAGES.map((stage) => {
             const stageLeads = leads.filter((l) => l.stage === stage)
             return (
-              <div key={stage} className="flex-shrink-0 w-72">
-                <div className={`bg-white rounded-lg border border-t-4 ${KANBAN_COLORS[stage]} shadow-sm`}>
-                  <div className="flex items-center justify-between px-3 py-2.5 border-b">
-                    <span className="text-sm font-medium text-slate-700">{LEAD_STAGE_LABELS[stage]}</span>
-                    <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{stageLeads.length}</span>
-                  </div>
-                  <div className="p-2 space-y-2 min-h-[200px] max-h-[calc(100vh-280px)] overflow-y-auto">
-                    {stageLeads.length === 0 && (
-                      <p className="text-xs text-slate-400 text-center py-6">Nenhum lead</p>
-                    )}
-                    {stageLeads.map((lead) => {
-                      const isStale = daysSince(lead.updated_at) > STALE_DAYS
-                      return (
-                        <div key={lead.id}
-                          className={`rounded-md border p-2.5 text-sm bg-white hover:shadow-sm transition-shadow cursor-pointer ${isStale ? 'border-orange-200 bg-orange-50/50' : 'border-slate-200'}`}
-                          onClick={() => openEdit(lead)}
-                        >
-                          <div className="flex items-start gap-1.5 mb-1">
-                            {isStale && <AlertTriangle size={12} className="text-orange-500 mt-0.5 flex-shrink-0" />}
-                            <p className="font-medium text-slate-800 leading-tight text-sm">{lead.title}</p>
-                          </div>
-                          {lead.client && (
-                            <p className="text-xs text-slate-500 mb-1.5">{lead.client.name}</p>
-                          )}
-                          <div className="flex flex-wrap gap-1 mb-1.5">
-                            {(lead.lead_products ?? []).map((lp) => lp.product && (
-                              <span key={lp.product.id} className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
-                                {lp.product.sigla}
-                              </span>
-                            ))}
-                          </div>
-                          <div className="flex items-center justify-between">
-                            {lead.estimated_value != null ? (
-                              <span className="text-xs font-semibold text-slate-700">
-                                {formatCurrencyCompact(lead.estimated_value)}
-                              </span>
-                            ) : <span />}
-                            {lead.next_step_date && (
-                              <span className={`text-[10px] ${lead.next_step_date <= today ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
-                                📅 {formatDate(lead.next_step_date)}
-                              </span>
-                            )}
-                          </div>
-                          {lead.responsible && (
-                            <p className="text-[10px] text-slate-400 mt-1">👤 {lead.responsible}</p>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
+              <KanbanColumn
+                key={stage}
+                stage={stage}
+                stageLeads={stageLeads}
+                today={today}
+                onEdit={openEdit}
+              />
+            )
+          })}
+
+          {/* Divisor visual */}
+          <div className="flex-shrink-0 flex items-center">
+            <div className="w-px h-full min-h-[200px] bg-slate-200 mx-1" />
+          </div>
+
+          {/* Estágios finais: Aprovado e Declinado */}
+          {FINAL_STAGES.map((stage) => {
+            const stageLeads = leads.filter((l) => l.stage === stage)
+            return (
+              <KanbanColumn
+                key={stage}
+                stage={stage}
+                stageLeads={stageLeads}
+                today={today}
+                onEdit={openEdit}
+                isFinal
+              />
             )
           })}
         </div>

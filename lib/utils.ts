@@ -76,8 +76,8 @@ export const LEAD_STAGE_LABELS: Record<string, string> = {
   diagnostico: 'Diagnóstico',
   proposta: 'Proposta',
   negociacao: 'Negociação',
-  fechado: 'Fechado',
-  perdido: 'Perdido',
+  fechado: 'Aprovado',
+  perdido: 'Declinado',
 }
 
 export const LEAD_STAGE_COLORS: Record<string, string> = {
