@@ -14,8 +14,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/use-toast'
-import { Loader2 } from 'lucide-react'
-import type { Client } from '@/lib/supabase/types'
+import { Loader2, Plus, Trash2, Users } from 'lucide-react'
+import type { Client, ClientContact } from '@/lib/supabase/types'
 
 const ESTADOS_BR = [
   'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS',
@@ -23,9 +23,11 @@ const ESTADOS_BR = [
   'SP','SE','TO',
 ]
 
+const CONTACT_ROLES = ['Compras', 'Financeiro', 'Projetos', 'Comercial', 'TI', 'Outro']
+
 const schema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
-  type: z.enum(['Fluzzo', 'Cliente']),
+  type: z.enum(['Fluzzo', 'Cliente', 'Lead']),
   contact: z.string().optional(),
   contract_type: z.string().optional(),
   start_date: z.string().optional(),
@@ -38,6 +40,14 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
+type ContactRow = {
+  id?: string           // undefined = novo (ainda não salvo)
+  name: string
+  role: string
+  email: string
+  phone: string
+}
+
 interface ClientSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -49,6 +59,7 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
   const supabase = createClient()
   const isEditing = !!client
   const [customContractType, setCustomContractType] = useState(false)
+  const [contacts, setContacts] = useState<ContactRow[]>([])
 
   const { data: company } = useQuery({
     queryKey: ['company'],
@@ -58,12 +69,26 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
     },
   })
 
-  // Busca tipos de contrato existentes — queryKey diferente para não sobrescrever cache da página
+  // Tipos de contrato existentes — queryKey isolado
   const { data: existingContractTypes = [] } = useQuery<string[]>({
     queryKey: ['clients-contract-types'],
     queryFn: async () => {
       const { data } = await supabase.from('clients').select('contract_type').not('contract_type', 'is', null)
       return Array.from(new Set((data ?? []).map((c) => c.contract_type).filter(Boolean) as string[])).sort()
+    },
+  })
+
+  // Contatos existentes do cliente (em edição)
+  const { data: existingContacts = [] } = useQuery<ClientContact[]>({
+    queryKey: ['client-contacts', client?.id],
+    enabled: !!client?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('client_contacts')
+        .select('*')
+        .eq('client_id', client!.id)
+        .order('created_at')
+      return (data ?? []) as ClientContact[]
     },
   })
 
@@ -74,31 +99,70 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
 
   const watchedContractType = watch('contract_type')
 
+  // Inicializa form e contatos quando o sheet abre
   useEffect(() => {
-    if (open) {
-      if (client) {
-        reset({
-          name: client.name,
-          type: (client.type as 'Fluzzo' | 'Cliente') ?? 'Cliente',
-          contact: client.contact ?? '',
-          contract_type: client.contract_type ?? '',
-          start_date: client.start_date ?? '',
-          segment_macro: client.segment_macro ?? '',
-          segment: client.segment ?? '',
-          state: client.state ?? '',
-          size: (client.size as 'Pequeno' | 'Médio' | 'Grande') ?? undefined,
-          active: client.active,
-        })
-        setCustomContractType(
-          !!client.contract_type && !existingContractTypes.includes(client.contract_type)
-        )
-      } else {
-        reset({ type: 'Cliente', active: true })
-        setCustomContractType(false)
-      }
+    if (!open) return
+    if (client) {
+      reset({
+        name: client.name,
+        type: (client.type as 'Fluzzo' | 'Cliente' | 'Lead') ?? 'Cliente',
+        contact: client.contact ?? '',
+        contract_type: client.contract_type ?? '',
+        start_date: client.start_date ?? '',
+        segment_macro: client.segment_macro ?? '',
+        segment: client.segment ?? '',
+        state: client.state ?? '',
+        size: (client.size as 'Pequeno' | 'Médio' | 'Grande') ?? undefined,
+        active: client.active,
+      })
+      setCustomContractType(
+        !!client.contract_type && !existingContractTypes.includes(client.contract_type)
+      )
+    } else {
+      reset({ type: 'Cliente', active: true })
+      setCustomContractType(false)
+      // Pré-carrega 3 linhas vazias com as roles padrão
+      setContacts([
+        { name: '', role: 'Compras', email: '', phone: '' },
+        { name: '', role: 'Financeiro', email: '', phone: '' },
+        { name: '', role: 'Projetos', email: '', phone: '' },
+      ])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, client, reset])
+  }, [open, client?.id])
+
+  // Carrega contatos existentes quando em edição
+  useEffect(() => {
+    if (open && client && existingContacts.length >= 0) {
+      const rows: ContactRow[] = existingContacts.map((c) => ({
+        id: c.id,
+        name: c.name,
+        role: c.role ?? '',
+        email: c.email ?? '',
+        phone: c.phone ?? '',
+      }))
+      // Garante que as 3 roles padrão sempre apareçam
+      const defaultRoles = ['Compras', 'Financeiro', 'Projetos']
+      defaultRoles.forEach((role) => {
+        if (!rows.find((r) => r.role === role)) {
+          rows.push({ name: '', role, email: '', phone: '' })
+        }
+      })
+      setContacts(rows)
+    }
+  }, [open, client?.id, existingContacts])
+
+  function addContact() {
+    setContacts((prev) => [...prev, { name: '', role: '', email: '', phone: '' }])
+  }
+
+  function removeContact(idx: number) {
+    setContacts((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  function updateContact(idx: number, field: keyof ContactRow, value: string) {
+    setContacts((prev) => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c))
+  }
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -114,12 +178,45 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
         company_id: company?.id ?? null,
         year: data.start_date ? new Date(data.start_date).getFullYear() : null,
       }
+
+      let clientId: string
       if (isEditing) {
         const { error } = await supabase.from('clients').update(payload).eq('id', client.id)
         if (error) throw error
+        clientId = client.id
       } else {
-        const { error } = await supabase.from('clients').insert(payload)
+        const { data: inserted, error } = await supabase.from('clients').insert(payload).select('id').single()
         if (error) throw error
+        clientId = inserted.id
+      }
+
+      // Salvar contatos (upsert por id ou insert para novos)
+      const validContacts = contacts.filter((c) => c.name.trim())
+      try {
+        if (isEditing) {
+          // Remove contatos que foram deletados
+          const keepIds = validContacts.filter((c) => c.id).map((c) => c.id!)
+          const existingIds = existingContacts.map((c) => c.id)
+          const toDelete = existingIds.filter((id) => !keepIds.includes(id))
+          if (toDelete.length > 0) {
+            await supabase.from('client_contacts').delete().in('id', toDelete)
+          }
+        }
+        for (const c of validContacts) {
+          if (c.id) {
+            await supabase.from('client_contacts').update({
+              name: c.name, role: c.role || null, email: c.email || null, phone: c.phone || null,
+            }).eq('id', c.id)
+          } else {
+            await supabase.from('client_contacts').insert({
+              client_id: clientId, name: c.name, role: c.role || null,
+              email: c.email || null, phone: c.phone || null,
+            })
+          }
+        }
+      } catch {
+        // client_contacts pode não existir ainda — migration 010 pendente
+        console.warn('client_contacts sync skipped — migration 010 may not have been applied.')
       }
     },
     onSuccess: () => {
@@ -152,9 +249,10 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Tipo</Label>
-                <Select value={watch('type')} onValueChange={(v) => setValue('type', v as 'Fluzzo' | 'Cliente')}>
+                <Select value={watch('type')} onValueChange={(v) => setValue('type', v as 'Fluzzo' | 'Cliente' | 'Lead')}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="Lead">Lead</SelectItem>
                     <SelectItem value="Cliente">Cliente</SelectItem>
                     <SelectItem value="Fluzzo">Fluzzo</SelectItem>
                   </SelectContent>
@@ -196,12 +294,6 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Contato */}
-            <div className="space-y-1.5">
-              <Label htmlFor="contact">Contato</Label>
-              <Input id="contact" {...register('contact')} placeholder="Nome do contato principal" />
             </div>
 
             {/* Data início + UF */}
@@ -260,6 +352,90 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
                     <SelectItem value="false">Inativo</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            {/* ── Contatos ─────────────────────────────────── */}
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users size={14} className="text-slate-500" />
+                  <Label className="text-sm font-medium">Contatos</Label>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addContact}
+                  className="h-7 px-2 text-xs gap-1">
+                  <Plus size={12} /> Adicionar
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                {contacts.map((contact, idx) => (
+                  <div key={idx} className="rounded-md border border-slate-200 p-3 space-y-2 bg-slate-50">
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* Área / Papel */}
+                      <div className="space-y-1">
+                        <Label className="text-xs text-slate-500">Área</Label>
+                        <Select value={contact.role} onValueChange={(v) => updateContact(idx, 'role', v)}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                          <SelectContent>
+                            {CONTACT_ROLES.map((r) => (
+                              <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {/* Nome */}
+                      <div className="space-y-1">
+                        <Label className="text-xs text-slate-500">Nome</Label>
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="Nome do contato"
+                          value={contact.name}
+                          onChange={(e) => updateContact(idx, 'name', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* Email */}
+                      <div className="space-y-1">
+                        <Label className="text-xs text-slate-500">E-mail</Label>
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="email@empresa.com"
+                          type="email"
+                          value={contact.email}
+                          onChange={(e) => updateContact(idx, 'email', e.target.value)}
+                        />
+                      </div>
+                      {/* Telefone + botão remover */}
+                      <div className="space-y-1">
+                        <Label className="text-xs text-slate-500">Telefone</Label>
+                        <div className="flex gap-1">
+                          <Input
+                            className="h-8 text-xs"
+                            placeholder="(11) 99999-0000"
+                            value={contact.phone}
+                            onChange={(e) => updateContact(idx, 'phone', e.target.value)}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50 flex-shrink-0"
+                            onClick={() => removeContact(idx)}
+                          >
+                            <Trash2 size={12} />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {contacts.length === 0 && (
+                  <p className="text-xs text-slate-400 text-center py-3">
+                    Nenhum contato adicionado. Clique em "Adicionar".
+                  </p>
+                )}
               </div>
             </div>
 

@@ -16,7 +16,7 @@ export type Json =
 // ProductType agora aceita qualquer string (tipo é editável pelo usuário)
 export type ProductType = string
 
-export type ClientType = 'Fluzzo' | 'Cliente'
+export type ClientType = 'Fluzzo' | 'Cliente' | 'Lead'
 
 export type ClientSize = 'Pequeno' | 'Médio' | 'Grande'
 
@@ -92,6 +92,17 @@ export type Client = {
   size: ClientSize | null
   indicator_id: string | null
   active: boolean
+  created_at: string
+}
+
+export type ClientContact = {
+  id: string
+  client_id: string
+  name: string
+  role: string | null
+  email: string | null
+  phone: string | null
+  is_primary: boolean
   created_at: string
 }
 
