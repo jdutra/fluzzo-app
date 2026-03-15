@@ -43,18 +43,14 @@ export function ProductSheet({ open, onOpenChange, product, onSuccess }: Product
     },
   })
 
-  // Busca os tipos existentes para sugestões
-  const { data: existingProducts = [] } = useQuery<Product[]>({
-    queryKey: ['products'],
+  // Busca os tipos existentes para sugestões — queryKey diferente para não sobrescrever cache da página
+  const { data: existingTypes = [] } = useQuery<string[]>({
+    queryKey: ['products-types-list'],
     queryFn: async () => {
       const { data } = await supabase.from('products').select('type').order('type')
-      return (data ?? []) as Product[]
+      return Array.from(new Set((data ?? []).map((p) => p.type).filter(Boolean) as string[])).sort()
     },
   })
-
-  const existingTypes = Array.from(
-    new Set(existingProducts.map((p) => p.type).filter(Boolean) as string[])
-  ).sort()
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),

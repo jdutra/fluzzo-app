@@ -58,18 +58,14 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
     },
   })
 
-  // Busca tipos de contrato existentes para sugestões
-  const { data: existingClients = [] } = useQuery<Client[]>({
-    queryKey: ['clients'],
+  // Busca tipos de contrato existentes — queryKey diferente para não sobrescrever cache da página
+  const { data: existingContractTypes = [] } = useQuery<string[]>({
+    queryKey: ['clients-contract-types'],
     queryFn: async () => {
       const { data } = await supabase.from('clients').select('contract_type').not('contract_type', 'is', null)
-      return (data ?? []) as Client[]
+      return Array.from(new Set((data ?? []).map((c) => c.contract_type).filter(Boolean) as string[])).sort()
     },
   })
-
-  const existingContractTypes = Array.from(
-    new Set(existingClients.map((c) => c.contract_type).filter(Boolean) as string[])
-  ).sort()
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
