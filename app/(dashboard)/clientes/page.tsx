@@ -13,12 +13,14 @@ import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/use-toast'
 import { formatDate } from '@/lib/utils'
 import { Users, Pencil, Trash2, Search } from 'lucide-react'
-import type { Client } from '@/lib/supabase/types'
+import type { Client, ClientType } from '@/lib/supabase/types'
 
 export default function ClientesPage() {
   const supabase = createClient()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState<ClientType | 'all'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null)
@@ -46,10 +48,14 @@ export default function ClientesPage() {
     onError: () => toast({ title: 'Erro ao excluir cliente.', variant: 'destructive' }),
   })
 
-  const filtered = clients.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.contact ?? '').toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = clients.filter((c) => {
+    const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
+      (c.cnpj ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.segment_macro ?? '').toLowerCase().includes(search.toLowerCase())
+    const matchType = typeFilter === 'all' || c.type === typeFilter
+    const matchStatus = statusFilter === 'all' || (statusFilter === 'active' ? c.active : !c.active)
+    return matchSearch && matchType && matchStatus
+  })
 
   function openNew() { setEditing(null); setSheetOpen(true) }
   function openEdit(c: Client) { setEditing(c); setSheetOpen(true) }
@@ -62,10 +68,35 @@ export default function ClientesPage() {
         action={{ label: 'Novo Cliente', onClick: openNew }}
       />
 
-      <div className="relative max-w-sm">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <Input placeholder="Buscar por nome ou contato..." value={search}
-          onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
+      {/* Busca + Filtros */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input placeholder="Buscar por nome, CNPJ ou segmento..." value={search}
+            onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9 w-72" />
+        </div>
+        <div className="h-5 w-px bg-slate-200" />
+        {/* Filtro tipo */}
+        {(['all', 'Cliente', 'Lead', 'Fluzzo'] as const).map((t) => (
+          <button key={t}
+            onClick={() => setTypeFilter(t)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              typeFilter === t ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+            }`}>
+            {t === 'all' ? 'Todos' : t}
+          </button>
+        ))}
+        <div className="h-5 w-px bg-slate-200" />
+        {/* Filtro status */}
+        {([['all', 'Qualquer status'], ['active', 'Ativo'], ['inactive', 'Inativo']] as const).map(([v, label]) => (
+          <button key={v}
+            onClick={() => setStatusFilter(v)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              statusFilter === v ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+            }`}>
+            {label}
+          </button>
+        ))}
       </div>
 
       {isLoading ? (
@@ -80,7 +111,7 @@ export default function ClientesPage() {
             <thead>
               <tr className="border-b bg-slate-50">
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Nome</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Contato</th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600 hidden md:table-cell">CNPJ</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600 hidden lg:table-cell">Segmento</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600 hidden lg:table-cell">UF</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Porte</th>
@@ -93,7 +124,7 @@ export default function ClientesPage() {
               {filtered.map((client) => (
                 <tr key={client.id} className="border-b last:border-0 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-medium text-slate-800">{client.name}</td>
-                  <td className="px-4 py-3 text-slate-600 hidden md:table-cell">{client.contact ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-600 hidden md:table-cell font-mono text-xs">{client.cnpj ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600 hidden lg:table-cell">{client.segment_macro ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600 hidden lg:table-cell">{client.state ?? '—'}</td>
                   <td className="px-4 py-3 hidden md:table-cell">

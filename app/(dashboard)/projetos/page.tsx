@@ -10,8 +10,9 @@ import { ProjectSheet } from '@/components/forms/project-sheet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/use-toast'
+import { Input } from '@/components/ui/input'
 import {
-  FolderKanban, MoreHorizontal, Pencil, Trash2, Eye,
+  FolderKanban, MoreHorizontal, Pencil, Trash2, Eye, Search,
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -38,6 +39,9 @@ export default function ProjetosPage() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
+  const [gpFilter, setGpFilter] = useState('')
+  const [clientFilter, setClientFilter] = useState('')
+  const [showGpSummary, setShowGpSummary] = useState(false)
 
   const { data: projects = [], isLoading } = useQuery<ProjectWithClient[]>({
     queryKey: ['projects'],
@@ -64,9 +68,12 @@ export default function ProjetosPage() {
     onError: (e: Error) => toast({ title: 'Erro ao remover.', description: e.message, variant: 'destructive' }),
   })
 
-  const filtered = statusFilter === 'all'
-    ? projects
-    : projects.filter((p) => p.status === statusFilter)
+  const filtered = projects.filter((p) => {
+    const matchStatus = statusFilter === 'all' || p.status === statusFilter
+    const matchGp = !gpFilter || (p.gp ?? '').toLowerCase().includes(gpFilter.toLowerCase())
+    const matchClient = !clientFilter || (p.client?.name ?? '').toLowerCase().includes(clientFilter.toLowerCase())
+    return matchStatus && matchGp && matchClient
+  })
 
   const countByStatus = ALL_STATUSES.reduce<Record<string, number>>((acc, s) => {
     acc[s] = projects.filter((p) => p.status === s).length
@@ -75,6 +82,17 @@ export default function ProjetosPage() {
 
   // Totals
   const totalRevenue = filtered.reduce((sum, p) => sum + (p.revenue ?? 0), 0)
+
+  // Resumo por GP
+  const gpList = Array.from(new Set(projects.map((p) => p.gp).filter(Boolean) as string[])).sort()
+  const gpSummary = gpList.map((gp) => {
+    const gpProjects = filtered.filter((p) => p.gp === gp)
+    return {
+      gp,
+      count: gpProjects.length,
+      revenue: gpProjects.reduce((sum, p) => sum + (p.revenue ?? 0), 0),
+    }
+  }).filter((r) => r.count > 0)
 
   function openCreate() {
     setSelectedProject(null)
@@ -98,6 +116,46 @@ export default function ProjetosPage() {
         description="Contratos e projetos ativos"
         action={{ label: 'Novo Projeto', onClick: openCreate }}
       />
+
+      {/* Filtros GP + Cliente */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input placeholder="Filtrar por GP..." value={gpFilter}
+            onChange={(e) => setGpFilter(e.target.value)} className="pl-8 h-8 w-44 text-sm" />
+        </div>
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input placeholder="Filtrar por cliente..." value={clientFilter}
+            onChange={(e) => setClientFilter(e.target.value)} className="pl-8 h-8 w-52 text-sm" />
+        </div>
+        {(gpFilter || clientFilter) && (
+          <button onClick={() => { setGpFilter(''); setClientFilter('') }}
+            className="text-xs text-slate-500 hover:text-slate-700 underline">
+            Limpar filtros
+          </button>
+        )}
+        <button onClick={() => setShowGpSummary((v) => !v)}
+          className={`ml-auto px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+            showGpSummary ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+          }`}>
+          Resumo por GP
+        </button>
+      </div>
+
+      {/* Resumo por GP */}
+      {showGpSummary && gpSummary.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {gpSummary.map(({ gp, count, revenue }) => (
+            <div key={gp} className="bg-white border rounded-lg px-4 py-3 cursor-pointer hover:border-teal-400 transition-colors"
+              onClick={() => setGpFilter(gpFilter === gp ? '' : gp)}>
+              <p className="text-xs text-slate-500 mb-0.5">GP</p>
+              <p className="font-semibold text-slate-800 truncate">{gp}</p>
+              <p className="text-xs text-slate-500 mt-1">{count} projeto{count > 1 ? 's' : ''} · {formatCurrency(revenue)}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Status filter tabs */}
       <div className="flex flex-wrap gap-2">

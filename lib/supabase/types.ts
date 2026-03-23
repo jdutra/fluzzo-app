@@ -82,6 +82,7 @@ export type Client = {
   company_id: string | null
   type: ClientType
   name: string
+  cnpj: string | null
   contact: string | null
   contract_type: string | null
   start_date: string | null
@@ -140,6 +141,7 @@ export type Partner = {
   partner_company: string | null
   email: string | null
   phone: string | null
+  pix: string | null
   status: PartnerStatus
   total_referrals: number
   total_revenue: number
@@ -171,6 +173,7 @@ export type LeadProduct = {
   id: string
   lead_id: string
   product_id: string
+  value: number | null
   created_at: string
 }
 

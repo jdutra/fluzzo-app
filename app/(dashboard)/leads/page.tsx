@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/use-toast'
 import {
   TrendingUp, MoreHorizontal, Pencil, Trash2, Eye,
-  ArrowRightCircle, AlertTriangle, LayoutGrid, List, CalendarClock,
+  ArrowRightCircle, AlertTriangle, LayoutGrid, List, CalendarClock, Search,
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -25,6 +25,7 @@ import {
 import type { Lead, LeadStage } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { convertLeadToProject } from '@/lib/actions/leads'
+import { Input } from '@/components/ui/input'
 
 type LeadWithRelations = Lead & {
   client: { id: string; name: string } | null
@@ -137,6 +138,7 @@ export default function LeadsPage() {
   const [convertTarget, setConvertTarget] = useState<Lead | null>(null)
   const [stageFilter, setStageFilter] = useState<LeadStage | 'all'>('all')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
+  const [search, setSearch] = useState('')
 
   const { data: leads = [], isLoading } = useQuery<LeadWithRelations[]>({
     queryKey: ['leads'],
@@ -195,11 +197,24 @@ export default function LeadsPage() {
     (l) => !['fechado', 'perdido'].includes(l.stage) && daysSince(l.updated_at) > STALE_DAYS
   ).length
 
-  const filtered = viewMode === 'followup'
+  const searchLower = search.toLowerCase()
+  const filtered = (viewMode === 'followup'
     ? followupLeads
     : stageFilter === 'all'
     ? leads
     : leads.filter((l) => l.stage === stageFilter)
+  ).filter((l) => {
+    if (!searchLower) return true
+    const productNames = (l.lead_products ?? []).map((lp) =>
+      `${lp.product?.name ?? ''} ${lp.product?.sigla ?? ''}`
+    ).join(' ').toLowerCase()
+    return (
+      l.title?.toLowerCase().includes(searchLower) ||
+      l.client?.name?.toLowerCase().includes(searchLower) ||
+      (l.responsible ?? '').toLowerCase().includes(searchLower) ||
+      productNames.includes(searchLower)
+    )
+  })
 
   const countByStage = ALL_STAGES.reduce<Record<string, number>>((acc, s) => {
     acc[s] = leads.filter((l) => l.stage === s).length
@@ -223,6 +238,15 @@ export default function LeadsPage() {
         <div className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
           <AlertTriangle size={16} className="flex-shrink-0" />
           <strong>{staleCount} lead{staleCount > 1 ? 's' : ''}</strong>&nbsp;sem atualização há mais de {STALE_DAYS} dias.
+        </div>
+      )}
+
+      {/* Busca */}
+      {(viewMode === 'list' || viewMode === 'followup') && (
+        <div className="relative max-w-sm">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input placeholder="Buscar por título, cliente, produto..." value={search}
+            onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
       )}
 
@@ -348,12 +372,12 @@ export default function LeadsPage() {
                   <tr className="border-b border-slate-100 bg-slate-50">
                     <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Título</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden md:table-cell">Cliente</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden lg:table-cell">Produtos</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden md:table-cell">Produtos</th>
                     <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden md:table-cell">Valor</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Estágio</th>
+                    <th className="text-center px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden lg:table-cell">Dias</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden lg:table-cell">Responsável</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden xl:table-cell">Próximo passo</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden lg:table-cell">Atualizado</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
@@ -379,7 +403,7 @@ export default function LeadsPage() {
                         <td className="px-4 py-3 text-slate-600 hidden md:table-cell">
                           {lead.client?.name ?? <span className="text-slate-400">—</span>}
                         </td>
-                        <td className="px-4 py-3 hidden lg:table-cell">
+                        <td className="px-4 py-3 hidden md:table-cell">
                           <div className="flex flex-wrap gap-1">
                             {(lead.lead_products ?? []).length > 0
                               ? (lead.lead_products ?? []).map((lp) => lp.product && (
@@ -399,6 +423,15 @@ export default function LeadsPage() {
                             {LEAD_STAGE_LABELS[lead.stage]}
                           </Badge>
                         </td>
+                        <td className="px-4 py-3 text-center hidden lg:table-cell">
+                          {lead.created_at ? (
+                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                              daysSince(lead.created_at) > 30 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {daysSince(lead.created_at)}d
+                            </span>
+                          ) : <span className="text-slate-400">—</span>}
+                        </td>
                         <td className="px-4 py-3 text-slate-600 hidden lg:table-cell">
                           {lead.responsible ?? <span className="text-slate-400">—</span>}
                         </td>
@@ -413,9 +446,6 @@ export default function LeadsPage() {
                               )}
                             </div>
                           ) : <span className="text-slate-400">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap hidden lg:table-cell">
-                          {formatDate(lead.updated_at)}
                         </td>
                         <td className="px-4 py-3">
                           <DropdownMenu>

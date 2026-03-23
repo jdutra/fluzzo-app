@@ -20,6 +20,7 @@ const schema = z.object({
   area: z.string().optional(),
   email: z.string().email('E-mail inválido').optional().or(z.literal('')),
   phone: z.string().optional(),
+  pix: z.string().optional(),
   status: z.enum(['ativo', 'inativo']),
   fee_avg: z.coerce.number().min(0).max(100).optional(),
 })
@@ -58,6 +59,7 @@ export function PartnerSheet({ open, onOpenChange, partner, onSuccess }: Partner
           area: partner.area ?? '',
           email: partner.email ?? '',
           phone: partner.phone ?? '',
+          pix: partner.pix ?? '',
           status: partner.status ?? 'ativo',
           fee_avg: partner.fee_avg != null ? partner.fee_avg * 100 : undefined,
         })
@@ -75,6 +77,7 @@ export function PartnerSheet({ open, onOpenChange, partner, onSuccess }: Partner
         area: data.area || null,
         email: data.email || null,
         phone: data.phone || null,
+        pix: data.pix || null,
         status: data.status,
         fee_avg: data.fee_avg != null ? data.fee_avg / 100 : null,
         company_id: company?.id ?? null,
@@ -129,6 +132,10 @@ export function PartnerSheet({ open, onOpenChange, partner, onSuccess }: Partner
             <div className="space-y-1.5">
               <Label htmlFor="phone">Telefone / WhatsApp</Label>
               <Input id="phone" {...register('phone')} placeholder="(11) 99999-9999" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pix">PIX</Label>
+              <Input id="pix" {...register('pix')} placeholder="CPF, CNPJ, e-mail ou chave aleatória" />
             </div>
 
             {/* Status */}

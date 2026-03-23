@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/use-toast'
-import { Loader2, Check } from 'lucide-react'
+import { Loader2, Check, X } from 'lucide-react'
 import type { Lead } from '@/lib/supabase/types'
 import { LEAD_STAGE_LABELS } from '@/lib/utils'
 import { cn } from '@/lib/utils'
@@ -43,10 +43,12 @@ interface LeadSheetProps {
   onSuccess: () => void
 }
 
+type ProductRow = { id: string; value: number }
+
 export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProps) {
   const supabase = createClient()
   const isEditing = !!lead
-  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
+  const [selectedProducts, setSelectedProducts] = useState<ProductRow[]>([])
 
   const { data: company } = useQuery({
     queryKey: ['company'],
@@ -86,15 +88,15 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
   ).sort()
 
   // Busca produtos já vinculados ao lead (em edição)
-  const { data: leadProductIds = [] } = useQuery<string[]>({
+  const { data: leadProductRows = [] } = useQuery<ProductRow[]>({
     queryKey: ['lead-products', lead?.id],
     enabled: !!lead?.id,
     queryFn: async () => {
       const { data } = await supabase
         .from('lead_products')
-        .select('product_id')
+        .select('product_id, value')
         .eq('lead_id', lead!.id)
-      return (data ?? []).map((r) => r.product_id)
+      return (data ?? []).map((r) => ({ id: r.product_id, value: (r as any).value ?? 0 }))
     },
   })
 
@@ -104,6 +106,9 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
   })
 
   const watchedStage = watch('stage')
+
+  // Calcula total automaticamente a partir dos valores por produto
+  const productsTotal = selectedProducts.reduce((sum, p) => sum + (p.value || 0), 0)
 
   // Popula o form quando abre (ou muda o lead selecionado)
   useEffect(() => {
@@ -129,15 +134,27 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
 
   // Carrega produtos vinculados separadamente (não interfere no reset do form)
   useEffect(() => {
-    if (open && lead && leadProductIds.length > 0) {
-      setSelectedProducts(leadProductIds)
+    if (open && lead && leadProductRows.length > 0) {
+      setSelectedProducts(leadProductRows)
     }
-  }, [open, lead?.id, leadProductIds])
+  }, [open, lead?.id, leadProductRows])
+
+  // Sincroniza o estimated_value com o total dos produtos quando muda
+  useEffect(() => {
+    if (productsTotal > 0) {
+      setValue('estimated_value', productsTotal)
+    }
+  }, [productsTotal, setValue])
 
   function toggleProduct(id: string) {
-    setSelectedProducts((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
-    )
+    setSelectedProducts((prev) => {
+      const exists = prev.find((p) => p.id === id)
+      return exists ? prev.filter((p) => p.id !== id) : [...prev, { id, value: 0 }]
+    })
+  }
+
+  function updateProductValue(id: string, value: number) {
+    setSelectedProducts((prev) => prev.map((p) => p.id === id ? { ...p, value } : p))
   }
 
   const mutation = useMutation({
@@ -145,8 +162,8 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
       const payload = {
         title: data.title,
         client_id: data.client_id || null,
-        product_id: selectedProducts[0] ?? null, // manter compat com campo legado
-        estimated_value: data.estimated_value ?? null,
+        product_id: selectedProducts[0]?.id ?? null, // manter compat com campo legado
+        estimated_value: productsTotal > 0 ? productsTotal : (data.estimated_value ?? null),
         stage: data.stage,
         responsible: data.responsible || null,
         notes: data.notes || null,
@@ -173,7 +190,7 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
         await supabase.from('lead_products').delete().eq('lead_id', leadId)
         if (selectedProducts.length > 0) {
           await supabase.from('lead_products').insert(
-            selectedProducts.map((pid) => ({ lead_id: leadId, product_id: pid }))
+            selectedProducts.map((p) => ({ lead_id: leadId, product_id: p.id, value: p.value || null }))
           )
         }
       } catch {
@@ -217,51 +234,59 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
               </Select>
             </div>
 
-            {/* Produtos (múltiplos) */}
+            {/* Produtos (múltiplos) com valor individual */}
             <div className="space-y-1.5">
               <Label>Produtos</Label>
-              <div className="border rounded-md divide-y max-h-40 overflow-y-auto">
+              <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
                 {products.length === 0 && (
                   <p className="text-xs text-slate-400 px-3 py-2">Nenhum produto ativo cadastrado.</p>
                 )}
                 {products.map((p) => {
-                  const checked = selectedProducts.includes(p.id)
+                  const row = selectedProducts.find((r) => r.id === p.id)
+                  const checked = !!row
                   return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => toggleProduct(p.id)}
-                      className={cn(
-                        'flex items-center gap-2 w-full px-3 py-2 text-sm text-left transition-colors',
-                        checked ? 'bg-teal-50' : 'hover:bg-slate-50'
-                      )}
-                    >
-                      <span className={cn(
-                        'flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center',
-                        checked ? 'bg-teal-600 border-teal-600' : 'border-slate-300'
-                      )}>
+                    <div key={p.id} className={cn('flex items-center gap-2 px-3 py-2 text-sm', checked ? 'bg-teal-50' : 'hover:bg-slate-50')}>
+                      <button type="button" onClick={() => toggleProduct(p.id)}
+                        className={cn('flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center',
+                          checked ? 'bg-teal-600 border-teal-600' : 'border-slate-300')}>
                         {checked && <Check size={10} className="text-white" />}
-                      </span>
+                      </button>
                       <span className="font-mono text-xs text-slate-500 w-8">{p.sigla}</span>
-                      <span className="text-slate-700">{p.name}</span>
-                      {p.type && (
-                        <span className="ml-auto text-xs text-slate-400">{p.type}</span>
+                      <span className="text-slate-700 flex-1">{p.name}</span>
+                      {checked && (
+                        <Input
+                          type="number" min="0" step="0.01"
+                          placeholder="R$ 0,00"
+                          value={row.value || ''}
+                          onChange={(e) => updateProductValue(p.id, parseFloat(e.target.value) || 0)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-28 h-7 text-xs text-right"
+                        />
                       )}
-                    </button>
+                    </div>
                   )
                 })}
               </div>
               {selectedProducts.length > 0 && (
-                <p className="text-xs text-slate-500">{selectedProducts.length} produto(s) selecionado(s)</p>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">{selectedProducts.length} produto(s) selecionado(s)</span>
+                  {productsTotal > 0 && (
+                    <span className="font-semibold text-teal-700">
+                      Total: R$ {productsTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
 
             {/* Valor + Estágio */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="estimated_value">Valor estimado (R$)</Label>
+                <Label htmlFor="estimated_value">Valor total (R$)</Label>
                 <Input id="estimated_value" type="number" step="0.01" min="0"
-                  {...register('estimated_value')} placeholder="0,00" />
+                  {...register('estimated_value')} placeholder="0,00"
+                  className={productsTotal > 0 ? 'bg-teal-50 font-medium' : ''} />
+                {productsTotal > 0 && <p className="text-[10px] text-teal-600">Auto-calculado pela soma dos produtos</p>}
               </div>
               <div className="space-y-1.5">
                 <Label>Estágio *</Label>

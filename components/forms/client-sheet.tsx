@@ -23,13 +23,12 @@ const ESTADOS_BR = [
   'SP','SE','TO',
 ]
 
-const CONTACT_ROLES = ['Compras', 'Financeiro', 'Projetos', 'Comercial', 'TI', 'Outro']
 
 const schema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
+  cnpj: z.string().optional(),
   type: z.enum(['Fluzzo', 'Cliente', 'Lead']),
   contact: z.string().optional(),
-  contract_type: z.string().optional(),
   start_date: z.string().optional(),
   segment_macro: z.string().optional(),
   segment: z.string().optional(),
@@ -58,7 +57,6 @@ interface ClientSheetProps {
 export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientSheetProps) {
   const supabase = createClient()
   const isEditing = !!client
-  const [customContractType, setCustomContractType] = useState(false)
   const [contacts, setContacts] = useState<ContactRow[]>([])
 
   const { data: company } = useQuery({
@@ -66,15 +64,6 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
     queryFn: async () => {
       const { data } = await supabase.from('companies').select('id').single()
       return data
-    },
-  })
-
-  // Tipos de contrato existentes — queryKey isolado
-  const { data: existingContractTypes = [] } = useQuery<string[]>({
-    queryKey: ['clients-contract-types'],
-    queryFn: async () => {
-      const { data } = await supabase.from('clients').select('contract_type').not('contract_type', 'is', null)
-      return Array.from(new Set((data ?? []).map((c) => c.contract_type).filter(Boolean) as string[])).sort()
     },
   })
 
@@ -97,17 +86,15 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
     defaultValues: { type: 'Cliente', active: true },
   })
 
-  const watchedContractType = watch('contract_type')
-
   // Inicializa form e contatos quando o sheet abre
   useEffect(() => {
     if (!open) return
     if (client) {
       reset({
         name: client.name,
+        cnpj: client.cnpj ?? '',
         type: (client.type as 'Fluzzo' | 'Cliente' | 'Lead') ?? 'Cliente',
         contact: client.contact ?? '',
-        contract_type: client.contract_type ?? '',
         start_date: client.start_date ?? '',
         segment_macro: client.segment_macro ?? '',
         segment: client.segment ?? '',
@@ -115,18 +102,10 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
         size: (client.size as 'Pequeno' | 'Médio' | 'Grande') ?? undefined,
         active: client.active,
       })
-      setCustomContractType(
-        !!client.contract_type && !existingContractTypes.includes(client.contract_type)
-      )
     } else {
       reset({ type: 'Cliente', active: true })
-      setCustomContractType(false)
-      // Pré-carrega 3 linhas vazias com as roles padrão
-      setContacts([
-        { name: '', role: 'Compras', email: '', phone: '' },
-        { name: '', role: 'Financeiro', email: '', phone: '' },
-        { name: '', role: 'Projetos', email: '', phone: '' },
-      ])
+      // Pré-carrega 1 linha vazia
+      setContacts([{ name: '', role: '', email: '', phone: '' }])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, client?.id])
@@ -141,13 +120,7 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
         email: c.email ?? '',
         phone: c.phone ?? '',
       }))
-      // Garante que as 3 roles padrão sempre apareçam
-      const defaultRoles = ['Compras', 'Financeiro', 'Projetos']
-      defaultRoles.forEach((role) => {
-        if (!rows.find((r) => r.role === role)) {
-          rows.push({ name: '', role, email: '', phone: '' })
-        }
-      })
+      if (rows.length === 0) rows.push({ name: '', role: '', email: '', phone: '' })
       setContacts(rows)
     }
   }, [open, client?.id, existingContacts])
@@ -167,14 +140,16 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       const payload = {
-        ...data,
+        name: data.name,
+        cnpj: data.cnpj || null,
+        type: data.type,
         contact: data.contact || null,
-        contract_type: data.contract_type || null,
         start_date: data.start_date || null,
         segment_macro: data.segment_macro || null,
         segment: data.segment || null,
         state: data.state || null,
         size: data.size || null,
+        active: data.active,
         company_id: company?.id ?? null,
         year: data.start_date ? new Date(data.start_date).getFullYear() : null,
       }
@@ -245,8 +220,12 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
               {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
             </div>
 
-            {/* Tipo + Tipo de Contrato */}
+            {/* CNPJ + Tipo */}
             <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cnpj">CNPJ</Label>
+                <Input id="cnpj" {...register('cnpj')} placeholder="00.000.000/0001-00" />
+              </div>
               <div className="space-y-1.5">
                 <Label>Tipo</Label>
                 <Select value={watch('type')} onValueChange={(v) => setValue('type', v as 'Fluzzo' | 'Cliente' | 'Lead')}>
@@ -257,42 +236,6 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
                     <SelectItem value="Fluzzo">Fluzzo</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Tipo de Contrato</Label>
-                {customContractType || existingContractTypes.length === 0 ? (
-                  <div className="flex gap-1">
-                    <Input
-                      placeholder="ex: Mensal, Projeto"
-                      value={watchedContractType ?? ''}
-                      onChange={(e) => setValue('contract_type', e.target.value)}
-                      className="text-sm"
-                    />
-                    {existingContractTypes.length > 0 && (
-                      <Button type="button" variant="outline" size="sm" className="shrink-0 px-2"
-                        onClick={() => { setCustomContractType(false); setValue('contract_type', '') }}>
-                        ↩
-                      </Button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex gap-1">
-                    <Select value={watchedContractType ?? ''} onValueChange={(v) => setValue('contract_type', v)}>
-                      <SelectTrigger className="flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">— nenhum —</SelectItem>
-                        {existingContractTypes.map((t) => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button type="button" variant="outline" size="sm" className="shrink-0 px-2 text-xs"
-                      title="Criar novo tipo de contrato"
-                      onClick={() => { setCustomContractType(true); setValue('contract_type', '') }}>
-                      +
-                    </Button>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -375,14 +318,12 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
                       {/* Área / Papel */}
                       <div className="space-y-1">
                         <Label className="text-xs text-slate-500">Área</Label>
-                        <Select value={contact.role} onValueChange={(v) => updateContact(idx, 'role', v)}>
-                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                          <SelectContent>
-                            {CONTACT_ROLES.map((r) => (
-                              <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="ex: Compras, TI, Financeiro"
+                          value={contact.role}
+                          onChange={(e) => updateContact(idx, 'role', e.target.value)}
+                        />
                       </div>
                       {/* Nome */}
                       <div className="space-y-1">
