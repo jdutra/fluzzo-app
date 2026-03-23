@@ -53,6 +53,10 @@ export type Company = {
   state: string | null
   encargo_simples: number
   encargo_retirada: number
+  default_class_recebimento: string | null
+  default_class_fee: string | null
+  default_class_imposto: string | null
+  default_class_consultor: string | null
   created_at: string
 }
 
@@ -306,6 +310,9 @@ export type Classification = {
   type: 'entrada' | 'saida' | 'ambos'
   description: string | null
   active: boolean
+  parent_id: string | null
+  is_totalizador: boolean
+  sort_order: number
   created_at: string
 }
 
