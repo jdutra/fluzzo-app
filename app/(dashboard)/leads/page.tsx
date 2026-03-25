@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/use-toast'
 import {
   TrendingUp, MoreHorizontal, Pencil, Trash2, Eye,
-  ArrowRightCircle, AlertTriangle, LayoutGrid, List, CalendarClock, Search,
+  ArrowRightCircle, AlertTriangle, LayoutGrid, List, CalendarClock, Search, ChevronRight,
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -54,12 +54,13 @@ type ViewMode = 'list' | 'kanban' | 'followup'
 // ─── Kanban Column ─────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  stage, stageLeads, today, onEdit, isFinal = false,
+  stage, stageLeads, today, onEdit, onChangeStage, isFinal = false,
 }: {
   stage: LeadStage
   stageLeads: LeadWithRelations[]
   today: string
   onEdit: (lead: LeadWithRelations) => void
+  onChangeStage: (lead: LeadWithRelations, newStage: LeadStage) => void
   isFinal?: boolean
 }) {
   const bgCard = isFinal ? 'bg-slate-50' : 'bg-white'
@@ -80,44 +81,61 @@ function KanbanColumn({
           )}
           {stageLeads.map((lead) => {
             const isStale = !isFinal && daysSince(lead.updated_at) > STALE_DAYS
+            // Próximo estágio para avançar rapidamente
+            const stageIndex = ALL_STAGES.indexOf(stage)
+            const nextStage = !isFinal && stageIndex < ALL_STAGES.indexOf('fechado') - 1
+              ? ALL_STAGES[stageIndex + 1]
+              : null
             return (
               <div key={lead.id}
-                className={`rounded-md border p-2.5 text-sm hover:shadow-sm transition-shadow cursor-pointer ${
+                className={`rounded-md border text-sm hover:shadow-sm transition-shadow ${
                   isStale ? 'border-orange-200 bg-orange-50/50' :
                   stage === 'fechado' ? 'border-green-200 bg-white' :
                   stage === 'perdido' ? 'border-red-100 bg-white' :
                   'border-slate-200 bg-white'
                 }`}
-                onClick={() => onEdit(lead)}
               >
-                <div className="flex items-start gap-1.5 mb-1">
-                  {isStale && <AlertTriangle size={12} className="text-orange-500 mt-0.5 flex-shrink-0" />}
-                  <p className="font-medium text-slate-800 leading-tight text-sm">{lead.title}</p>
-                </div>
-                {lead.client && (
-                  <p className="text-xs text-slate-500 mb-1.5">{lead.client.name}</p>
-                )}
-                <div className="flex flex-wrap gap-1 mb-1.5">
-                  {(lead.lead_products ?? []).map((lp) => lp.product && (
-                    <span key={lp.product.id} className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
-                      {lp.product.sigla}
-                    </span>
-                  ))}
-                </div>
-                <div className="flex items-center justify-between">
-                  {lead.estimated_value != null ? (
-                    <span className="text-xs font-semibold text-slate-700">
-                      {formatCurrencyCompact(lead.estimated_value)}
-                    </span>
-                  ) : <span />}
-                  {lead.next_step_date && !isFinal && (
-                    <span className={`text-[10px] ${lead.next_step_date <= today ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
-                      📅 {formatDate(lead.next_step_date)}
-                    </span>
+                {/* Clicável para editar */}
+                <div className="p-2.5 cursor-pointer" onClick={() => onEdit(lead)}>
+                  <div className="flex items-start gap-1.5 mb-1">
+                    {isStale && <AlertTriangle size={12} className="text-orange-500 mt-0.5 flex-shrink-0" />}
+                    <p className="font-medium text-slate-800 leading-tight text-sm">{lead.title}</p>
+                  </div>
+                  {lead.client && (
+                    <p className="text-xs text-slate-500 mb-1.5">{lead.client.name}</p>
+                  )}
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    {(lead.lead_products ?? []).map((lp) => lp.product && (
+                      <span key={lp.product.id} className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
+                        {lp.product.sigla}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    {lead.estimated_value != null ? (
+                      <span className="text-xs font-semibold text-slate-700">
+                        {formatCurrencyCompact(lead.estimated_value)}
+                      </span>
+                    ) : <span />}
+                    {lead.next_step_date && !isFinal && (
+                      <span className={`text-[10px] ${lead.next_step_date <= today ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
+                        📅 {formatDate(lead.next_step_date)}
+                      </span>
+                    )}
+                  </div>
+                  {lead.responsible && (
+                    <p className="text-[10px] text-slate-400 mt-1">👤 {lead.responsible}</p>
                   )}
                 </div>
-                {lead.responsible && (
-                  <p className="text-[10px] text-slate-400 mt-1">👤 {lead.responsible}</p>
+                {/* Botão avançar estágio */}
+                {nextStage && (
+                  <button
+                    onClick={() => onChangeStage(lead, nextStage)}
+                    className="w-full flex items-center justify-center gap-1 py-1 border-t border-slate-100 text-[10px] text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-b-md transition-colors"
+                  >
+                    <ChevronRight size={10} />
+                    Mover para {LEAD_STAGE_LABELS[nextStage]}
+                  </button>
                 )}
               </div>
             )
@@ -175,6 +193,17 @@ export default function LeadsPage() {
     onError: (e: Error) => toast({ title: 'Erro ao remover.', description: e.message, variant: 'destructive' }),
   })
 
+  const changeStageMutation = useMutation({
+    mutationFn: async ({ id, stage }: { id: string; stage: LeadStage }) => {
+      const { error } = await supabase.from('leads').update({ stage }).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    },
+    onError: (e: Error) => toast({ title: 'Erro ao mover lead.', description: e.message, variant: 'destructive' }),
+  })
+
   const convertMutation = useMutation({
     mutationFn: async (leadId: string) => convertLeadToProject(leadId),
     onSuccess: () => {
@@ -224,6 +253,9 @@ export default function LeadsPage() {
   function openCreate() { setSelectedLead(null); setSheetOpen(true) }
   function openEdit(lead: LeadWithRelations) { setSelectedLead(lead); setSheetOpen(true) }
   function handleRefresh() { queryClient.invalidateQueries({ queryKey: ['leads'] }); setSheetOpen(false) }
+  function handleChangeStage(lead: LeadWithRelations, newStage: LeadStage) {
+    changeStageMutation.mutate({ id: lead.id, stage: newStage })
+  }
 
   return (
     <div className="space-y-5">
@@ -241,14 +273,12 @@ export default function LeadsPage() {
         </div>
       )}
 
-      {/* Busca */}
-      {(viewMode === 'list' || viewMode === 'followup') && (
-        <div className="relative max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input placeholder="Buscar por título, cliente, produto..." value={search}
-            onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
-        </div>
-      )}
+      {/* Busca — sempre visível */}
+      <div className="relative max-w-sm">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <Input placeholder="Buscar por título, cliente, produto, responsável..." value={search}
+          onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
+      </div>
 
       {/* View toggle + stage filters */}
       <div className="flex flex-wrap items-center gap-2">
@@ -315,7 +345,7 @@ export default function LeadsPage() {
         <div className="flex gap-4 overflow-x-auto pb-4">
           {/* Estágios ativos */}
           {ACTIVE_STAGES.map((stage) => {
-            const stageLeads = leads.filter((l) => l.stage === stage)
+            const stageLeads = filtered.filter((l) => l.stage === stage)
             return (
               <KanbanColumn
                 key={stage}
@@ -323,6 +353,7 @@ export default function LeadsPage() {
                 stageLeads={stageLeads}
                 today={today}
                 onEdit={openEdit}
+                onChangeStage={handleChangeStage}
               />
             )
           })}
@@ -334,7 +365,7 @@ export default function LeadsPage() {
 
           {/* Estágios finais: Aprovado e Declinado */}
           {FINAL_STAGES.map((stage) => {
-            const stageLeads = leads.filter((l) => l.stage === stage)
+            const stageLeads = filtered.filter((l) => l.stage === stage)
             return (
               <KanbanColumn
                 key={stage}
@@ -342,6 +373,7 @@ export default function LeadsPage() {
                 stageLeads={stageLeads}
                 today={today}
                 onEdit={openEdit}
+                onChangeStage={handleChangeStage}
                 isFinal
               />
             )
@@ -371,9 +403,9 @@ export default function LeadsPage() {
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50">
                     <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Título</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden md:table-cell">Cliente</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden md:table-cell">Produtos</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden md:table-cell">Valor</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden sm:table-cell">Cliente</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Produtos</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden sm:table-cell">Valor</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Estágio</th>
                     <th className="text-center px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden lg:table-cell">Dias</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden lg:table-cell">Responsável</th>
@@ -400,10 +432,10 @@ export default function LeadsPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-slate-600 hidden md:table-cell">
+                        <td className="px-4 py-3 text-slate-600 hidden sm:table-cell">
                           {lead.client?.name ?? <span className="text-slate-400">—</span>}
                         </td>
-                        <td className="px-4 py-3 hidden md:table-cell">
+                        <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-1">
                             {(lead.lead_products ?? []).length > 0
                               ? (lead.lead_products ?? []).map((lp) => lp.product && (
@@ -411,11 +443,11 @@ export default function LeadsPage() {
                                   {lp.product.sigla}
                                 </span>
                               ))
-                              : <span className="text-slate-400">—</span>
+                              : <span className="text-slate-400 text-xs">—</span>
                             }
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-right font-medium text-slate-700 hidden md:table-cell">
+                        <td className="px-4 py-3 text-right font-medium text-slate-700 hidden sm:table-cell">
                           {lead.estimated_value != null ? formatCurrencyCompact(lead.estimated_value) : <span className="text-slate-400">—</span>}
                         </td>
                         <td className="px-4 py-3">

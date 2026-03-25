@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
@@ -56,6 +56,7 @@ interface ClientSheetProps {
 
 export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientSheetProps) {
   const supabase = createClient()
+  const queryClient = useQueryClient()
   const isEditing = !!client
   const [contacts, setContacts] = useState<ContactRow[]>([])
 
@@ -196,6 +197,10 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
     },
     onSuccess: () => {
       toast({ title: isEditing ? 'Cliente atualizado.' : 'Cliente cadastrado.' })
+      // Invalida cache dos contatos para forçar reload ao reabrir
+      if (client?.id) {
+        queryClient.invalidateQueries({ queryKey: ['client-contacts', client.id] })
+      }
       onSuccess()
     },
     onError: (e: Error) => toast({ title: 'Erro ao salvar.', description: e.message, variant: 'destructive' }),

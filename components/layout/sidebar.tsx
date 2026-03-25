@@ -21,6 +21,7 @@ import {
   UploadCloud,
   Tag,
   Landmark,
+  UserCircle2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -54,6 +55,7 @@ const navItems: NavItem[] = [
   { href: '/importar', label: 'Importar', icon: UploadCloud, group: 'Financeiro' },
   // Cadastros
   { href: '/clientes', label: 'Clientes', icon: Users, group: 'Cadastros' },
+  { href: '/vendedores', label: 'Vendedores', icon: UserCircle2, group: 'Cadastros' },
   { href: '/parceiros', label: 'Parceiros', icon: Handshake, group: 'Cadastros' },
   { href: '/consultores', label: 'Consultores', icon: UserCheck, group: 'Cadastros' },
   { href: '/produtos', label: 'Produtos', icon: Package, group: 'Cadastros' },

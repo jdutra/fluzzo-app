@@ -279,26 +279,44 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
               )}
             </div>
 
-            {/* Valor + Estágio */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="estimated_value">Valor total (R$)</Label>
-                <Input id="estimated_value" type="number" step="0.01" min="0"
-                  {...register('estimated_value')} placeholder="0,00"
-                  className={productsTotal > 0 ? 'bg-teal-50 font-medium' : ''} />
-                {productsTotal > 0 && <p className="text-[10px] text-teal-600">Auto-calculado pela soma dos produtos</p>}
+            {/* Estágio — campo em destaque */}
+            <div className="space-y-1.5">
+              <Label className="font-semibold">Estágio do lead *</Label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {STAGES.map((s) => {
+                  const isSelected = watch('stage') === s
+                  const colors: Record<string, string> = {
+                    qualificacao: 'border-slate-300 data-[active=true]:bg-slate-700 data-[active=true]:text-white data-[active=true]:border-slate-700',
+                    diagnostico:  'border-blue-200  data-[active=true]:bg-blue-600   data-[active=true]:text-white data-[active=true]:border-blue-600',
+                    proposta:     'border-yellow-200 data-[active=true]:bg-yellow-500 data-[active=true]:text-white data-[active=true]:border-yellow-500',
+                    negociacao:   'border-orange-200 data-[active=true]:bg-orange-500 data-[active=true]:text-white data-[active=true]:border-orange-500',
+                    fechado:      'border-green-200 data-[active=true]:bg-green-600  data-[active=true]:text-white data-[active=true]:border-green-600',
+                    perdido:      'border-red-200   data-[active=true]:bg-red-500    data-[active=true]:text-white data-[active=true]:border-red-500',
+                  }
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      data-active={isSelected}
+                      onClick={() => setValue('stage', s)}
+                      className={`px-2 py-1.5 rounded-md border text-xs font-medium transition-all text-center ${
+                        isSelected ? '' : 'bg-white text-slate-600 hover:bg-slate-50'
+                      } ${colors[s]}`}
+                    >
+                      {LEAD_STAGE_LABELS[s]}
+                    </button>
+                  )
+                })}
               </div>
-              <div className="space-y-1.5">
-                <Label>Estágio *</Label>
-                <Select value={watch('stage')} onValueChange={(v) => setValue('stage', v as typeof STAGES[number])}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {STAGES.map((s) => (
-                      <SelectItem key={s} value={s}>{LEAD_STAGE_LABELS[s]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            </div>
+
+            {/* Valor */}
+            <div className="space-y-1.5">
+              <Label htmlFor="estimated_value">Valor total (R$)</Label>
+              <Input id="estimated_value" type="number" step="0.01" min="0"
+                {...register('estimated_value')} placeholder="0,00"
+                className={productsTotal > 0 ? 'bg-teal-50 font-medium' : ''} />
+              {productsTotal > 0 && <p className="text-[10px] text-teal-600">Auto-calculado pela soma dos produtos</p>}
             </div>
 
             {/* Responsável — com sugestões */}

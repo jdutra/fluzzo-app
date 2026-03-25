@@ -155,6 +155,18 @@ export type Partner = {
   created_at: string
 }
 
+export type Vendedor = {
+  id: string
+  company_id: string | null
+  name: string
+  email: string | null
+  phone: string | null
+  role: string | null
+  active: boolean
+  notes: string | null
+  created_at: string
+}
+
 export type Lead = {
   id: string
   company_id: string | null
