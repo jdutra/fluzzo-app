@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/shared/page-header'
@@ -229,16 +229,15 @@ export default function ClassificacoesPage() {
   const [defaultImp, setDefaultImp] = useState<string>('')
   const [defaultCon, setDefaultCon] = useState<string>('')
 
-  // Sync defaults from company on first load
-  useMemo(() => {
+  // Sync defaults from company when data loads
+  useEffect(() => {
     if (company) {
       setDefaultRec(company.default_class_recebimento ?? '')
       setDefaultFee(company.default_class_fee ?? '')
       setDefaultImp(company.default_class_imposto ?? '')
       setDefaultCon(company.default_class_consultor ?? '')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [company?.id])
+  }, [company?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeCount = classifications.filter((c) => c.active).length
 
