@@ -69,7 +69,8 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
   })
 
   // Contatos existentes do cliente (em edição)
-  const { data: existingContacts = [] } = useQuery<ClientContact[]>({
+  // ATENÇÃO: não usar default = [] inline — cria nova referência a cada render e causa loop no useEffect
+  const { data: existingContacts, isSuccess: contactsLoaded } = useQuery<ClientContact[]>({
     queryKey: ['client-contacts', client?.id],
     enabled: !!client?.id,
     queryFn: async () => {
@@ -111,20 +112,19 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, client?.id])
 
-  // Carrega contatos existentes quando em edição
+  // Carrega contatos existentes quando a query termina (isSuccess garante referência estável)
   useEffect(() => {
-    if (open && client && existingContacts.length >= 0) {
-      const rows: ContactRow[] = existingContacts.map((c) => ({
-        id: c.id,
-        name: c.name,
-        role: c.role ?? '',
-        email: c.email ?? '',
-        phone: c.phone ?? '',
-      }))
-      if (rows.length === 0) rows.push({ name: '', role: '', email: '', phone: '' })
-      setContacts(rows)
-    }
-  }, [open, client?.id, existingContacts])
+    if (!open || !client || !contactsLoaded) return
+    const rows: ContactRow[] = (existingContacts ?? []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      role: c.role ?? '',
+      email: c.email ?? '',
+      phone: c.phone ?? '',
+    }))
+    if (rows.length === 0) rows.push({ name: '', role: '', email: '', phone: '' })
+    setContacts(rows)
+  }, [open, client?.id, contactsLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function addContact() {
     setContacts((prev) => [...prev, { name: '', role: '', email: '', phone: '' }])
@@ -172,7 +172,7 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
         if (isEditing) {
           // Remove contatos que foram deletados
           const keepIds = validContacts.filter((c) => c.id).map((c) => c.id!)
-          const existingIds = existingContacts.map((c) => c.id)
+          const existingIds = (existingContacts ?? []).map((c) => c.id)
           const toDelete = existingIds.filter((id) => !keepIds.includes(id))
           if (toDelete.length > 0) {
             await supabase.from('client_contacts').delete().in('id', toDelete)
