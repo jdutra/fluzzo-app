@@ -328,6 +328,14 @@ export type Classification = {
   created_at: string
 }
 
+export type LeadStageHistory = {
+  id: string
+  lead_id: string
+  from_stage: string | null
+  to_stage: string
+  changed_at: string
+}
+
 export type AuditLog = {
   id: string
   entity: string
@@ -486,6 +494,12 @@ export type Database = {
         Row: CashForecastManual
         Insert: Omit<CashForecastManual, 'id' | 'created_at'>
         Update: Partial<Omit<CashForecastManual, 'id' | 'created_at'>>
+        Relationships: []
+      }
+      lead_stage_history: {
+        Row: LeadStageHistory
+        Insert: Omit<LeadStageHistory, 'id' | 'changed_at'>
+        Update: never
         Relationships: []
       }
       audit_log: {

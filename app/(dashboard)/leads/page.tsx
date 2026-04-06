@@ -13,6 +13,7 @@ import { toast } from '@/components/ui/use-toast'
 import {
   TrendingUp, MoreHorizontal, Pencil, Trash2, Eye,
   ArrowRightCircle, AlertTriangle, LayoutGrid, List, CalendarClock, Search, ChevronRight,
+  Timer, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -22,7 +23,7 @@ import {
   formatCurrencyCompact, formatDate, daysSince,
   LEAD_STAGE_LABELS, LEAD_STAGE_COLORS,
 } from '@/lib/utils'
-import type { Lead, LeadStage } from '@/lib/supabase/types'
+import type { Lead, LeadStage, LeadStageHistory } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { convertLeadToProject } from '@/lib/actions/leads'
 import { Input } from '@/components/ui/input'
@@ -157,6 +158,7 @@ export default function LeadsPage() {
   const [stageFilter, setStageFilter] = useState<LeadStage | 'all'>('all')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [search, setSearch] = useState('')
+  const [showMetrics, setShowMetrics] = useState(false)
 
   const { data: leads = [], isLoading } = useQuery<LeadWithRelations[]>({
     queryKey: ['leads'],
@@ -179,6 +181,72 @@ export default function LeadsPage() {
       return (data ?? []) as LeadWithRelations[]
     },
   })
+
+  // ── Histórico de estágios para métricas de ciclo ────────────
+  const { data: stageHistory = [] } = useQuery<LeadStageHistory[]>({
+    queryKey: ['lead-stage-history'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('lead_stage_history')
+        .select('lead_id, from_stage, to_stage, changed_at')
+        .order('changed_at')
+      return (data ?? []) as LeadStageHistory[]
+    },
+    // Graceful fallback: se a tabela não existe (migration 021 pendente), retorna []
+    throwOnError: false,
+    retry: false,
+  })
+
+  const stageMetrics = useMemo(() => {
+    // Agrupa registros por lead
+    const byLead: Record<string, LeadStageHistory[]> = {}
+    for (const r of stageHistory) {
+      if (!byLead[r.lead_id]) byLead[r.lead_id] = []
+      byLead[r.lead_id].push(r)
+    }
+
+    // Para cada lead, calcula quanto tempo ficou em cada estágio
+    const durations: Record<string, number[]> = {}
+    const cycleTimes: number[] = []
+
+    for (const records of Object.values(byLead)) {
+      // Ordena por data (já vêm ordenados do servidor, mas garantia)
+      records.sort((a, b) => a.changed_at.localeCompare(b.changed_at))
+
+      for (let i = 0; i < records.length; i++) {
+        const cur = records[i]
+        const next = records[i + 1]
+        if (!next) continue // ainda no estágio — sem duração calculável
+
+        const days =
+          (new Date(next.changed_at).getTime() - new Date(cur.changed_at).getTime()) /
+          (1000 * 60 * 60 * 24)
+        if (!durations[cur.to_stage]) durations[cur.to_stage] = []
+        durations[cur.to_stage].push(days)
+      }
+
+      // Tempo total do ciclo: do primeiro registro até "fechado"
+      const fechado = records.find((r) => r.to_stage === 'fechado')
+      const primeiro = records[0]
+      if (fechado && primeiro && primeiro.to_stage !== 'fechado') {
+        const totalDays =
+          (new Date(fechado.changed_at).getTime() - new Date(primeiro.changed_at).getTime()) /
+          (1000 * 60 * 60 * 24)
+        cycleTimes.push(totalDays)
+      }
+    }
+
+    const avg = (arr: number[]) =>
+      arr.length === 0 ? null : Math.round(arr.reduce((a, b) => a + b, 0) / arr.length)
+
+    return {
+      byStage: Object.fromEntries(
+        ACTIVE_STAGES.map((s) => [s, avg(durations[s] ?? [])])
+      ) as Record<string, number | null>,
+      avgCycle: avg(cycleTimes),
+      sampleSize: cycleTimes.length,
+    }
+  }, [stageHistory])
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -209,6 +277,7 @@ export default function LeadsPage() {
     onSuccess: () => {
       toast({ title: 'Lead convertido em projeto com sucesso!' })
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
       setConvertTarget(null)
     },
     onError: (e: Error) => toast({ title: 'Erro ao converter.', description: e.message, variant: 'destructive' }),
@@ -264,6 +333,68 @@ export default function LeadsPage() {
         description="Pipeline de oportunidades de venda"
         action={{ label: 'Novo Lead', onClick: openCreate }}
       />
+
+      {/* ── Métricas de ciclo de vendas ──────────────────────── */}
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <button
+          onClick={() => setShowMetrics((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Timer size={15} className="text-teal-600" />
+            <span className="text-sm font-medium text-slate-700">Ciclo de vendas</span>
+            {stageMetrics.avgCycle !== null && (
+              <span className="text-xs text-slate-500">
+                — ciclo médio: <strong className="text-slate-700">{stageMetrics.avgCycle} dias</strong>
+                {stageMetrics.sampleSize > 0 && (
+                  <span className="text-slate-400"> ({stageMetrics.sampleSize} fechados)</span>
+                )}
+              </span>
+            )}
+          </div>
+          {showMetrics
+            ? <ChevronUp size={15} className="text-slate-400" />
+            : <ChevronDown size={15} className="text-slate-400" />
+          }
+        </button>
+
+        {showMetrics && (
+          <div className="border-t border-slate-100 px-4 py-4">
+            {stageHistory.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-2">
+                Dados de histórico ainda não disponíveis. Execute a migration 021 no Supabase.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {ACTIVE_STAGES.map((stage) => {
+                  const avg = stageMetrics.byStage[stage]
+                  return (
+                    <div key={stage} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-3">
+                      <p className="text-[11px] text-slate-500 uppercase tracking-wide mb-1 font-medium">
+                        {LEAD_STAGE_LABELS[stage]}
+                      </p>
+                      {avg !== null ? (
+                        <p className="text-xl font-bold text-slate-800">
+                          {avg}
+                          <span className="text-xs font-normal text-slate-500 ml-1">dias</span>
+                        </p>
+                      ) : (
+                        <p className="text-sm text-slate-400 italic">Sem dados</p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            {stageHistory.length > 0 && (
+              <p className="text-[11px] text-slate-400 mt-3">
+                Tempo médio que os leads permanecem em cada estágio antes de avançar.
+                Calculado sobre leads que já transitaram de estágio.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Stale alert */}
       {staleCount > 0 && (

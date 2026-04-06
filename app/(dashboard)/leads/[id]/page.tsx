@@ -25,6 +25,7 @@ import {
 } from '@/lib/utils'
 import type { Lead, LeadInteraction, InteractionType } from '@/lib/supabase/types'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { convertLeadToProject } from '@/lib/actions/leads'
 
 type LeadDetail = Lead & {
@@ -61,6 +62,7 @@ const STALE_DAYS = 7
 export default function LeadDetailPage({ params }: { params: { id: string } }) {
   const supabase = createClient()
   const queryClient = useQueryClient()
+  const router = useRouter()
   const leadId = params.id
 
   const [editSheetOpen, setEditSheetOpen] = useState(false)
@@ -99,8 +101,12 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
     mutationFn: async () => convertLeadToProject(leadId),
     onSuccess: () => {
       toast({ title: 'Lead convertido em projeto com sucesso!' })
+      // Invalida caches do lead E da lista de projetos (revalidatePath não afeta o React Query)
       queryClient.invalidateQueries({ queryKey: ['lead', leadId] })
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
       setConvertConfirmOpen(false)
+      router.push('/projetos')
     },
     onError: (e: Error) => toast({ title: 'Erro ao converter.', description: e.message, variant: 'destructive' }),
   })
