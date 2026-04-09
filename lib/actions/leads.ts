@@ -10,7 +10,7 @@ import { revalidatePath } from 'next/cache'
 export async function convertLeadToProject(leadId: string) {
   const supabase = createClient()
 
-  // Busca dados do lead
+  // Busca dados do lead (incluindo produtos vinculados)
   const { data: lead, error: leadError } = await supabase
     .from('leads')
     .select('*, client:clients(id, name)')
@@ -18,6 +18,12 @@ export async function convertLeadToProject(leadId: string) {
     .single()
 
   if (leadError || !lead) throw leadError ?? new Error('Lead não encontrado')
+
+  // Busca produtos do lead
+  const { data: leadProducts } = await supabase
+    .from('lead_products')
+    .select('product_id')
+    .eq('lead_id', leadId)
 
   // Cria o projeto
   const { data: project, error: projectError } = await supabase
@@ -35,6 +41,16 @@ export async function convertLeadToProject(leadId: string) {
     .single()
 
   if (projectError) throw projectError
+
+  // Copia os produtos do lead para o projeto
+  if (leadProducts && leadProducts.length > 0) {
+    await supabase.from('project_products').insert(
+      leadProducts.map((lp) => ({
+        project_id: project.id,
+        product_id: lp.product_id,
+      }))
+    )
+  }
 
   // Atualiza o lead como fechado e vincula ao projeto
   const { error: updateError } = await supabase

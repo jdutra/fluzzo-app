@@ -95,6 +95,78 @@ export async function updateEntryStatus(
 }
 
 /**
+ * Cria um lançamento manual em um projeto.
+ */
+export async function createManualEntry(params: {
+  project_id: string
+  company_id: string | null
+  client_id: string | null
+  classification: string
+  amount: number
+  forecast_payment: string | null
+  forecast_billing: string | null
+  notes: string | null
+}) {
+  const supabase = createClient()
+
+  const { error } = await supabase.from('entries').insert({
+    project_id: params.project_id,
+    company_id: params.company_id,
+    client_id: params.client_id,
+    classification: params.classification,
+    amount: params.amount,
+    forecast_payment: params.forecast_payment || null,
+    forecast_billing: params.forecast_billing || null,
+    notes: params.notes || null,
+    status: 'previsto',
+    is_manual: true,
+  })
+
+  if (error) throw error
+  revalidatePath(`/projetos/${params.project_id}`)
+  revalidatePath('/lancamentos')
+}
+
+/**
+ * Atualiza dados de um lançamento (valor, classificação, datas, notas).
+ */
+export async function updateEntry(
+  id: string,
+  params: {
+    classification: string
+    amount: number
+    forecast_payment: string | null
+    forecast_billing: string | null
+    notes: string | null
+  },
+  projectId: string
+) {
+  const supabase = createClient()
+  const { error } = await supabase.from('entries').update({
+    classification: params.classification,
+    amount: params.amount,
+    forecast_payment: params.forecast_payment || null,
+    forecast_billing: params.forecast_billing || null,
+    notes: params.notes || null,
+  }).eq('id', id)
+
+  if (error) throw error
+  revalidatePath(`/projetos/${projectId}`)
+  revalidatePath('/lancamentos')
+}
+
+/**
+ * Remove um lançamento.
+ */
+export async function deleteEntry(id: string, projectId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('entries').delete().eq('id', id)
+  if (error) throw error
+  revalidatePath(`/projetos/${projectId}`)
+  revalidatePath('/lancamentos')
+}
+
+/**
  * Atualiza classificação de um lançamento e grava auditoria.
  */
 export async function updateEntryClassification(

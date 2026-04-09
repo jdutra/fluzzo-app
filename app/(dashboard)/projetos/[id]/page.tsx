@@ -12,9 +12,10 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/use-toast'
 import { ProjectSheet } from '@/components/forms/project-sheet'
+import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import {
   ArrowLeft, Pencil, User, CalendarDays,
-  FileText, Receipt, UserCheck, Handshake, Plus, Check, X, Package,
+  FileText, Receipt, UserCheck, Handshake, Plus, Check, X, Package, Trash2,
 } from 'lucide-react'
 import {
   formatCurrency, formatDate,
@@ -23,7 +24,7 @@ import {
 } from '@/lib/utils'
 import type { Project, Entry, EntryStatus } from '@/lib/supabase/types'
 import Link from 'next/link'
-import { updateEntryStatus } from '@/lib/actions/entries'
+import { updateEntryStatus, createManualEntry, updateEntry, deleteEntry } from '@/lib/actions/entries'
 import { addProjectConsultant, addProjectPartner } from '@/lib/actions/projects'
 
 type ProjectDetail = Project & {
@@ -89,6 +90,14 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
   const [addingPartner, setAddingPartner] = useState(false)
   const [newConsultant, setNewConsultant] = useState<ConsultantForm>(emptyConsultantForm)
   const [newPartner, setNewPartner] = useState<PartnerForm>(emptyPartnerForm)
+
+  // Estado para criar/editar lançamentos
+  type EntryForm = { classification: string; amount: string; forecast_payment: string; forecast_billing: string; notes: string }
+  const emptyEntryForm: EntryForm = { classification: 'Receita', amount: '', forecast_payment: '', forecast_billing: '', notes: '' }
+  const [addingEntry, setAddingEntry] = useState(false)
+  const [editingEntry, setEditingEntry] = useState<EntryRow | null>(null)
+  const [entryForm, setEntryForm] = useState<EntryForm>(emptyEntryForm)
+  const [deleteEntryTarget, setDeleteEntryTarget] = useState<EntryRow | null>(null)
 
   // ─── Queries ─────────────────────────────────────────────
   const { data: project, isLoading: projectLoading } = useQuery<ProjectDetail>({
@@ -246,6 +255,85 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
     onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
   })
 
+  function invalidateEntries() {
+    queryClient.invalidateQueries({ queryKey: ['project-entries', projectId] })
+    queryClient.invalidateQueries({ queryKey: ['entries'] })
+  }
+
+  const createEntryMutation = useMutation({
+    mutationFn: async () => {
+      if (!entryForm.amount || parseFloat(entryForm.amount) <= 0) throw new Error('Informe um valor válido')
+      await createManualEntry({
+        project_id: projectId,
+        company_id: project?.company_id ?? null,
+        client_id: project?.client_id ?? null,
+        classification: entryForm.classification || 'Receita',
+        amount: parseFloat(entryForm.amount),
+        forecast_payment: entryForm.forecast_payment || null,
+        forecast_billing: entryForm.forecast_billing || null,
+        notes: entryForm.notes || null,
+      })
+    },
+    onSuccess: () => {
+      toast({ title: 'Lançamento criado.' })
+      invalidateEntries()
+      setAddingEntry(false)
+      setEntryForm(emptyEntryForm)
+    },
+    onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
+  })
+
+  const updateEntryMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingEntry) return
+      if (!entryForm.amount || parseFloat(entryForm.amount) <= 0) throw new Error('Informe um valor válido')
+      await updateEntry(editingEntry.id, {
+        classification: entryForm.classification || 'Receita',
+        amount: parseFloat(entryForm.amount),
+        forecast_payment: entryForm.forecast_payment || null,
+        forecast_billing: entryForm.forecast_billing || null,
+        notes: entryForm.notes || null,
+      }, projectId)
+    },
+    onSuccess: () => {
+      toast({ title: 'Lançamento atualizado.' })
+      invalidateEntries()
+      setEditingEntry(null)
+      setEntryForm(emptyEntryForm)
+    },
+    onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
+  })
+
+  const deleteEntryMutation = useMutation({
+    mutationFn: async (entry: EntryRow) => {
+      await deleteEntry(entry.id, projectId)
+    },
+    onSuccess: () => {
+      toast({ title: 'Lançamento removido.' })
+      invalidateEntries()
+      setDeleteEntryTarget(null)
+    },
+    onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
+  })
+
+  function openEditEntry(entry: EntryRow) {
+    setEditingEntry(entry)
+    setEntryForm({
+      classification: entry.classification ?? 'Receita',
+      amount: String(entry.amount),
+      forecast_payment: entry.forecast_payment ?? '',
+      forecast_billing: entry.forecast_billing ?? '',
+      notes: entry.notes ?? '',
+    })
+    setAddingEntry(false)
+  }
+
+  function openAddEntry() {
+    setAddingEntry(true)
+    setEditingEntry(null)
+    setEntryForm(emptyEntryForm)
+  }
+
   function handleProjectUpdated() {
     queryClient.invalidateQueries({ queryKey: ['project', projectId] })
     queryClient.invalidateQueries({ queryKey: ['projects'] })
@@ -315,11 +403,11 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               <InfoRow icon={CalendarDays} label="Data da venda" value={project.sale_date ? formatDate(project.sale_date) : null} />
               <InfoRow icon={CalendarDays} label="Início faturamento" value={project.billing_start_date ? formatDate(project.billing_start_date) : null} />
               <InfoRow icon={FileText} label="Purchase Order" value={project.purchase_order} />
-              {projectProducts.length > 0 && (
+              {projectProducts.filter(pp => pp.product).length > 0 && (
                 <InfoRow
                   icon={Package}
                   label="Produtos"
-                  value={projectProducts.map(pp => pp.product.sigla).join(' · ')}
+                  value={projectProducts.filter(pp => pp.product).map(pp => pp.product.sigla).join(' · ')}
                 />
               )}
               <Separator />
@@ -604,25 +692,110 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                 <CardTitle className="text-base flex items-center gap-2">
                   <Receipt size={16} /> Lançamentos ({entries.length})
                 </CardTitle>
-                <Link href="/lancamentos" className="text-xs text-teal-600 hover:underline">
-                  Ver todos os lançamentos →
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs gap-1 text-slate-500 hover:text-teal-700"
+                    onClick={openAddEntry}
+                  >
+                    <Plus size={12} /> Adicionar
+                  </Button>
+                  <Link href="/lancamentos" className="text-xs text-teal-600 hover:underline">
+                    Ver todos →
+                  </Link>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {entries.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-sm">
-                  Nenhum lançamento gerado. Edite o projeto para gerar lançamentos.
+              {/* Formulário inline de novo / edição de lançamento */}
+              {(addingEntry || editingEntry) && (
+                <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 space-y-3">
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                    {editingEntry ? 'Editar lançamento' : 'Novo lançamento manual'}
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Classificação</Label>
+                      <Input
+                        className="h-8 text-xs mt-1"
+                        placeholder="ex: Receita, Consultoria…"
+                        value={entryForm.classification}
+                        onChange={(e) => setEntryForm((p) => ({ ...p, classification: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Valor (R$) *</Label>
+                      <Input
+                        className="h-8 text-xs mt-1"
+                        type="number" min="0" step="0.01"
+                        placeholder="0,00"
+                        value={entryForm.amount}
+                        onChange={(e) => setEntryForm((p) => ({ ...p, amount: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Prev. pagamento</Label>
+                      <Input
+                        className="h-8 text-xs mt-1"
+                        type="date"
+                        value={entryForm.forecast_payment}
+                        onChange={(e) => setEntryForm((p) => ({ ...p, forecast_payment: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Prev. faturamento</Label>
+                      <Input
+                        className="h-8 text-xs mt-1"
+                        type="date"
+                        value={entryForm.forecast_billing}
+                        onChange={(e) => setEntryForm((p) => ({ ...p, forecast_billing: e.target.value }))}
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <Label className="text-xs">Observação</Label>
+                      <Input
+                        className="h-8 text-xs mt-1"
+                        placeholder="Opcional"
+                        value={entryForm.notes}
+                        onChange={(e) => setEntryForm((p) => ({ ...p, notes: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm" variant="ghost" className="h-7 text-xs"
+                      onClick={() => { setAddingEntry(false); setEditingEntry(null); setEntryForm(emptyEntryForm) }}
+                    >
+                      <X size={12} className="mr-1" /> Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs bg-teal-600 hover:bg-teal-700"
+                      disabled={createEntryMutation.isPending || updateEntryMutation.isPending}
+                      onClick={() => editingEntry ? updateEntryMutation.mutate() : createEntryMutation.mutate()}
+                    >
+                      <Check size={12} className="mr-1" />
+                      {(createEntryMutation.isPending || updateEntryMutation.isPending) ? 'Salvando…' : 'Salvar'}
+                    </Button>
+                  </div>
                 </div>
-              ) : (
+              )}
+
+              {entries.length === 0 && !addingEntry ? (
+                <div className="p-8 text-center text-slate-400 text-sm">
+                  Nenhum lançamento. Clique em <strong>Adicionar</strong> para criar manualmente
+                  ou edite o projeto para gerar lançamentos automáticos por parcelas.
+                </div>
+              ) : entries.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-100 bg-slate-50">
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase">Parcela</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase">Parc.</th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase">Classificação</th>
                         <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase">Valor</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase">Prev. pagamento</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase hidden sm:table-cell">Prev. pgto</th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase">Status</th>
                         <th className="px-4 py-2.5 text-xs" />
                       </tr>
@@ -630,15 +803,19 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                     <tbody className="divide-y divide-slate-100">
                       {entries.map((entry) => {
                         const nextStatus = STATUS_FLOW[entry.status]
-                        const nextLabel = STATUS_FLOW_LABEL[entry.status]
+                        const isEditing = editingEntry?.id === entry.id
                         return (
-                          <tr key={entry.id} className="hover:bg-slate-50">
-                            <td className="px-4 py-2.5 font-mono text-slate-600">
-                              {entry.installment != null ? `${entry.installment}/${entries.filter(e => !e.is_manual).length}` : '—'}
+                          <tr key={entry.id} className={`hover:bg-slate-50 ${isEditing ? 'bg-teal-50' : ''}`}>
+                            <td className="px-4 py-2.5 font-mono text-slate-500 text-xs">
+                              {entry.is_manual ? (
+                                <span className="text-xs text-slate-400 italic">manual</span>
+                              ) : entry.installment != null ? (
+                                `${entry.installment}/${entries.filter(e => !e.is_manual).length}`
+                              ) : '—'}
                             </td>
                             <td className="px-4 py-2.5 text-slate-600 text-xs">{entry.classification}</td>
                             <td className="px-4 py-2.5 text-right font-medium">{formatCurrency(entry.amount)}</td>
-                            <td className="px-4 py-2.5 text-slate-500 text-xs">
+                            <td className="px-4 py-2.5 text-slate-500 text-xs hidden sm:table-cell">
                               {entry.forecast_payment ? formatDate(entry.forecast_payment) : '—'}
                             </td>
                             <td className="px-4 py-2.5">
@@ -647,18 +824,34 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                               </Badge>
                             </td>
                             <td className="px-4 py-2.5">
-                              {nextStatus && nextLabel && (
+                              <div className="flex items-center gap-1">
+                                {nextStatus && (
+                                  <Button
+                                    size="sm" variant="ghost"
+                                    className="h-7 text-xs gap-1 text-slate-400 hover:text-teal-700"
+                                    onClick={() => statusMutation.mutate({ entry, newStatus: nextStatus })}
+                                    disabled={statusMutation.isPending}
+                                  >
+                                    <Check size={11} />
+                                    {nextStatus === 'faturado' ? 'Faturar' : 'Pagar'}
+                                  </Button>
+                                )}
                                 <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 text-xs gap-1 text-slate-500 hover:text-teal-700"
-                                  onClick={() => statusMutation.mutate({ entry, newStatus: nextStatus })}
-                                  disabled={statusMutation.isPending}
+                                  size="sm" variant="ghost"
+                                  className="h-7 w-7 p-0 text-slate-300 hover:text-slate-600"
+                                  onClick={() => openEditEntry(entry)}
                                 >
-                                  <Check size={11} />
-                                  {nextStatus === 'faturado' ? 'Faturar' : 'Pagar'}
+                                  <Pencil size={11} />
                                 </Button>
-                              )}
+                                <Button
+                                  size="sm" variant="ghost"
+                                  className="h-7 w-7 p-0 text-slate-300 hover:text-red-500"
+                                  onClick={() => setDeleteEntryTarget(entry)}
+                                  disabled={deleteEntryMutation.isPending}
+                                >
+                                  <Trash2 size={11} />
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         )
@@ -666,11 +859,21 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                     </tbody>
                   </table>
                 </div>
-              )}
+              ) : null}
             </CardContent>
           </Card>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteEntryTarget}
+        onOpenChange={(v) => !v && setDeleteEntryTarget(null)}
+        title="Remover lançamento"
+        description={`Remover lançamento de ${deleteEntryTarget ? formatCurrency(deleteEntryTarget.amount) : ''}? Esta ação não pode ser desfeita.`}
+        confirmLabel="Remover"
+        loading={deleteEntryMutation.isPending}
+        onConfirm={() => deleteEntryTarget && deleteEntryMutation.mutate(deleteEntryTarget)}
+      />
 
       <ProjectSheet
         open={editSheetOpen}
