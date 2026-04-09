@@ -178,6 +178,20 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
     },
   })
 
+  const { data: classifications = [] } = useQuery<{ id: string; name: string; parent_id: string | null }[]>({
+    queryKey: ['classifications-active'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('classifications')
+        .select('id, name, parent_id')
+        .eq('active', true)
+        .eq('is_totalizador', false)
+        .order('sort_order')
+        .order('name')
+      return data ?? []
+    },
+  })
+
   // ─── Mutations ────────────────────────────────────────────
   const statusMutation = useMutation({
     mutationFn: async ({ entry, newStatus }: { entry: Entry; newStatus: EntryStatus }) => {
@@ -717,12 +731,25 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <div className="sm:col-span-2">
                       <Label className="text-xs">Classificação</Label>
-                      <Input
-                        className="h-8 text-xs mt-1"
-                        placeholder="ex: Receita, Consultoria…"
+                      <Select
                         value={entryForm.classification}
-                        onChange={(e) => setEntryForm((p) => ({ ...p, classification: e.target.value }))}
-                      />
+                        onValueChange={(v) => setEntryForm((p) => ({ ...p, classification: v }))}
+                      >
+                        <SelectTrigger className="h-8 text-xs mt-1">
+                          <SelectValue placeholder="Selecionar…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {classifications.length === 0 && (
+                            <SelectItem value="_none" disabled>Nenhuma classificação cadastrada</SelectItem>
+                          )}
+                          {classifications.map((c) => (
+                            <SelectItem key={c.id} value={c.name}>
+                              {c.parent_id ? <span className="text-slate-400 mr-1">↳</span> : null}
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div>
                       <Label className="text-xs">Valor (R$) *</Label>
