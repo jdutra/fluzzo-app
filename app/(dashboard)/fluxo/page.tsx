@@ -349,16 +349,16 @@ export default function FluxoPage() {
             <table className="text-xs border-collapse w-full" style={{ minWidth: 900 }}>
               {/* Cabeçalho: meses como colunas */}
               <thead>
-                <tr className="bg-slate-800 text-white">
-                  <th className="sticky left-0 z-10 bg-slate-800 text-left px-3 py-2.5 font-semibold w-52 min-w-[200px]">
+                <tr className="bg-slate-100 border-b-2 border-slate-300 text-slate-600">
+                  <th className="sticky left-0 z-10 bg-slate-100 text-left px-3 py-2.5 font-semibold w-52 min-w-[200px] uppercase tracking-wide text-[10px]">
                     Descrição
                   </th>
                   {MONTHS_SHORT.map((m, i) => (
-                    <th key={i} className="px-2 py-2.5 text-right font-semibold w-20 min-w-[72px]">
+                    <th key={i} className="px-2 py-2.5 text-right font-semibold w-20 min-w-[72px] uppercase tracking-wide text-[10px]">
                       {m}/{String(year).slice(2)}
                     </th>
                   ))}
-                  <th className="px-2 py-2.5 text-right font-semibold w-20 min-w-[72px] bg-slate-700">
+                  <th className="px-2 py-2.5 text-right font-semibold w-20 min-w-[72px] bg-slate-200 uppercase tracking-wide text-[10px]">
                     Total
                   </th>
                 </tr>
@@ -611,14 +611,31 @@ function SpreadGroupHeader({
   color: 'green' | 'teal' | 'red'
   fmt: (v: number) => string
 }) {
-  const bg = color === 'green' ? 'bg-green-700' : color === 'teal' ? 'bg-teal-700' : 'bg-red-700'
-  const total = values.reduce((s, v) => s + v, 0)
+  const styles = {
+    green: {
+      row: 'bg-emerald-50 border-y border-emerald-200 cursor-pointer select-none hover:bg-emerald-100 transition-colors',
+      sticky: 'sticky left-0 z-10 bg-emerald-50 px-3 py-2 font-semibold text-emerald-800',
+      cell: 'text-emerald-700 font-semibold',
+      total: 'bg-emerald-100 text-emerald-800 font-bold',
+    },
+    teal: {
+      row: 'bg-teal-50 border-y border-teal-200 cursor-pointer select-none hover:bg-teal-100 transition-colors',
+      sticky: 'sticky left-0 z-10 bg-teal-50 px-3 py-2 font-semibold text-teal-800',
+      cell: 'text-teal-700 font-semibold',
+      total: 'bg-teal-100 text-teal-800 font-bold',
+    },
+    red: {
+      row: 'bg-rose-50 border-y border-rose-200 cursor-pointer select-none hover:bg-rose-100 transition-colors',
+      sticky: 'sticky left-0 z-10 bg-rose-50 px-3 py-2 font-semibold text-rose-800',
+      cell: 'text-rose-700 font-semibold',
+      total: 'bg-rose-100 text-rose-800 font-bold',
+    },
+  }
+  const s = styles[color]
+  const total = values.reduce((sv, v) => sv + v, 0)
   return (
-    <tr
-      className={`${bg} text-white cursor-pointer select-none hover:brightness-110 transition-all`}
-      onClick={onToggle}
-    >
-      <td className={`sticky left-0 z-10 ${bg} px-3 py-2 font-semibold`}>
+    <tr className={s.row} onClick={onToggle}>
+      <td className={s.sticky}>
         <div className="flex items-center gap-1.5">
           <ChevronDown
             size={13}
@@ -628,11 +645,11 @@ function SpreadGroupHeader({
         </div>
       </td>
       {values.map((v, i) => (
-        <td key={i} className={`px-2 py-2 text-right font-semibold ${v === 0 ? 'opacity-40' : ''}`}>
+        <td key={i} className={`px-2 py-2 text-right ${s.cell} ${v === 0 ? 'opacity-30' : ''}`}>
           {fmt(v)}
         </td>
       ))}
-      <td className="px-2 py-2 text-right font-bold bg-black/10">
+      <td className={`px-2 py-2 text-right ${s.total}`}>
         {fmt(total)}
       </td>
     </tr>
@@ -652,34 +669,34 @@ function SpreadRow({
 
   const styles: Record<SpreadVariant, { row: string; cell: (v: number) => string; first: string; totalCell: string }> = {
     detail: {
-      row: 'border-b border-slate-100 hover:bg-slate-50',
+      row: 'border-b border-slate-100 hover:bg-slate-50/70',
       cell: () => 'text-slate-600',
-      first: 'sticky left-0 z-10 bg-white pl-7 pr-3 py-1.5 text-slate-600 font-normal',
-      totalCell: 'bg-slate-50 font-medium text-slate-700',
+      first: 'sticky left-0 z-10 bg-white pl-7 pr-3 py-1.5 text-slate-500 font-normal',
+      totalCell: 'bg-slate-50 font-medium text-slate-600',
     },
     'total-green': {
-      row: 'bg-green-50 border-t-2 border-green-200',
-      cell: (v) => v >= 0 ? 'text-green-700 font-semibold' : 'text-red-600 font-semibold',
-      first: 'sticky left-0 z-10 bg-green-50 px-3 py-2 text-green-800 font-bold',
-      totalCell: 'bg-green-100 font-bold text-green-800',
+      row: 'bg-emerald-50/80 border-t border-emerald-200',
+      cell: (v) => v >= 0 ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-semibold',
+      first: 'sticky left-0 z-10 bg-emerald-50 px-3 py-2 text-emerald-800 font-bold',
+      totalCell: 'bg-emerald-100/80 font-bold text-emerald-800',
     },
     'total-red': {
-      row: 'bg-red-50 border-t-2 border-red-200',
-      cell: () => 'text-red-700 font-semibold',
-      first: 'sticky left-0 z-10 bg-red-50 px-3 py-2 text-red-800 font-bold',
-      totalCell: 'bg-red-100 font-bold text-red-800',
+      row: 'bg-rose-50/80 border-t border-rose-200',
+      cell: () => 'text-rose-700 font-semibold',
+      first: 'sticky left-0 z-10 bg-rose-50 px-3 py-2 text-rose-800 font-bold',
+      totalCell: 'bg-rose-100/80 font-bold text-rose-800',
     },
     saldo: {
-      row: 'bg-slate-700 text-white',
-      cell: (v) => v >= 0 ? 'text-green-300 font-bold' : 'text-red-300 font-bold',
-      first: 'sticky left-0 z-10 bg-slate-700 px-3 py-2.5 text-white font-bold',
-      totalCell: 'bg-slate-800 font-bold text-white',
+      row: 'bg-slate-800/90 border-y border-slate-600',
+      cell: (v) => v >= 0 ? 'text-emerald-300 font-bold' : 'text-rose-300 font-bold',
+      first: 'sticky left-0 z-10 bg-slate-800 px-3 py-2.5 text-slate-100 font-bold',
+      totalCell: 'bg-slate-900/50 font-bold text-slate-100',
     },
     'highlight-blue': {
-      row: 'bg-blue-600 text-white',
-      cell: (v) => v >= 0 ? 'text-blue-100 font-semibold' : 'text-orange-300 font-semibold',
-      first: 'sticky left-0 z-10 bg-blue-600 px-3 py-2.5 text-white font-bold',
-      totalCell: 'bg-blue-700 font-bold text-white',
+      row: 'bg-slate-50 border-b border-slate-200',
+      cell: (v) => v >= 0 ? 'text-slate-700 font-semibold' : 'text-rose-600 font-semibold',
+      first: 'sticky left-0 z-10 bg-slate-50 px-3 py-2.5 text-slate-700 font-bold',
+      totalCell: 'bg-slate-100 font-bold text-slate-700',
     },
   }
 
