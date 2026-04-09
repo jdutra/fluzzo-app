@@ -16,7 +16,7 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
 } from '@/components/ui/sheet'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Plus, Trash2, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Plus, Trash2, Loader2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
@@ -71,7 +71,7 @@ export default function FluxoPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('entries')
-        .select('forecast_payment, amount, status')
+        .select('forecast_payment, amount, status, classification')
         .gte('forecast_payment', `${year}-01-01`)
         .lte('forecast_payment', `${year}-12-31`)
         .neq('status', 'cancelado')
@@ -131,6 +131,86 @@ export default function FluxoPage() {
       }
     })
   }, [entryData, manualData, year])
+
+  // ── Spreadsheet colapsável ───────────────────────────────────
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['receitas']))
+
+  function toggleGroup(id: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const MONTHS_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+  const monthPeriods = Array.from({ length: 12 }, (_, i) =>
+    `${year}-${String(i + 1).padStart(2, '0')}`
+  )
+
+  const spreadsheet = useMemo(() => {
+    // Receitas: entries agrupadas por classification
+    const byClass: Record<string, Record<string, number>> = {}
+    for (const e of entryData) {
+      const period = e.forecast_payment?.slice(0, 7)
+      if (!period) continue
+      const cls = (e as any).classification || 'Receita'
+      if (!byClass[cls]) byClass[cls] = {}
+      byClass[cls][period] = (byClass[cls][period] || 0) + (e.amount ?? 0)
+    }
+
+    // Manual: separado por tipo e category
+    const byEntrada: Record<string, Record<string, number>> = {}
+    const bySaida: Record<string, Record<string, number>> = {}
+    for (const m of manualData) {
+      const period = m.period
+      const cat = m.category || 'Outros'
+      if (m.type === 'entrada') {
+        if (!byEntrada[cat]) byEntrada[cat] = {}
+        byEntrada[cat][period] = (byEntrada[cat][period] || 0) + m.amount
+      } else {
+        if (!bySaida[cat]) bySaida[cat] = {}
+        bySaida[cat][period] = (bySaida[cat][period] || 0) + m.amount
+      }
+    }
+
+    // Totais por mês
+    const totalEntradaByMonth: Record<string, number> = {}
+    const totalSaidaByMonth: Record<string, number> = {}
+    for (const p of monthPeriods) {
+      const recSum = Object.values(byClass).reduce((s, v) => s + (v[p] ?? 0), 0)
+      const entSum = Object.values(byEntrada).reduce((s, v) => s + (v[p] ?? 0), 0)
+      const saiSum = Object.values(bySaida).reduce((s, v) => s + (v[p] ?? 0), 0)
+      totalEntradaByMonth[p] = recSum + entSum
+      totalSaidaByMonth[p] = saiSum
+    }
+
+    // Saldo acumulado
+    let acc = 0
+    const saldoAcumulado: Record<string, number> = {}
+    const saldoMensal: Record<string, number> = {}
+    const saldoInicial: Record<string, number> = {}
+    for (const p of monthPeriods) {
+      saldoInicial[p] = acc
+      const s = totalEntradaByMonth[p] - totalSaidaByMonth[p]
+      saldoMensal[p] = s
+      acc += s
+      saldoAcumulado[p] = acc
+    }
+
+    return { byClass, byEntrada, bySaida, totalEntradaByMonth, totalSaidaByMonth, saldoMensal, saldoAcumulado, saldoInicial }
+  }, [entryData, manualData, year, monthPeriods])
+
+  // Formata valor compacto para a tabela
+  function fmtCell(v: number): string {
+    if (v === 0) return '—'
+    const abs = Math.abs(v)
+    const fmt = abs >= 1000
+      ? `${(abs / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}K`
+      : abs.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+    return v < 0 ? `- ${fmt}` : fmt
+  }
 
   const totalReceita = monthlyData.reduce((s, m) => s + m.receita, 0)
   const totalRecebido = monthlyData.reduce((s, m) => s + m.recebido, 0)
@@ -259,37 +339,144 @@ export default function FluxoPage() {
         </CardContent>
       </Card>
 
-      {/* Monthly table */}
+      {/* ── Spreadsheet colapsável ── */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Resumo por mês</CardTitle>
+          <CardTitle className="text-base">Fluxo detalhado — {year}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="text-xs border-collapse w-full" style={{ minWidth: 900 }}>
+              {/* Cabeçalho: meses como colunas */}
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase">Mês</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase">Receita prev.</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase">Recebido</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase">Saídas</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase">Saldo</th>
+                <tr className="bg-slate-800 text-white">
+                  <th className="sticky left-0 z-10 bg-slate-800 text-left px-3 py-2.5 font-semibold w-52 min-w-[200px]">
+                    Descrição
+                  </th>
+                  {MONTHS_SHORT.map((m, i) => (
+                    <th key={i} className="px-2 py-2.5 text-right font-semibold w-20 min-w-[72px]">
+                      {m}/{String(year).slice(2)}
+                    </th>
+                  ))}
+                  <th className="px-2 py-2.5 text-right font-semibold w-20 min-w-[72px] bg-slate-700">
+                    Total
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {monthlyData.map((row) => (
-                  <tr key={row.period} className="hover:bg-slate-50">
-                    <td className="px-4 py-2.5 font-medium text-slate-700">
-                      {MONTH_NAMES_FULL[monthlyData.indexOf(row)]} {year}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-slate-600">{formatCurrency(row.receita)}</td>
-                    <td className="px-4 py-2.5 text-right text-teal-700">{formatCurrency(row.recebido)}</td>
-                    <td className="px-4 py-2.5 text-right text-red-500">{formatCurrency(row.saida)}</td>
-                    <td className={`px-4 py-2.5 text-right font-medium ${row.saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(row.saldo)}
-                    </td>
-                  </tr>
+              <tbody>
+
+                {/* ── Saldo Inicial ── */}
+                <SpreadRow
+                  label="Saldo Inicial de Caixa"
+                  values={monthPeriods.map(p => spreadsheet.saldoInicial[p])}
+                  variant="highlight-blue"
+                  fmt={fmtCell}
+                />
+
+                {/* ══ GRUPO: Receitas de Projetos ══ */}
+                <SpreadGroupHeader
+                  label="Receitas de Projetos"
+                  expanded={expandedGroups.has('receitas')}
+                  onToggle={() => toggleGroup('receitas')}
+                  values={monthPeriods.map(p =>
+                    Object.values(spreadsheet.byClass).reduce((s, v) => s + (v[p] ?? 0), 0)
+                  )}
+                  color="green"
+                  fmt={fmtCell}
+                />
+                {expandedGroups.has('receitas') && Object.entries(spreadsheet.byClass).map(([cls, byMonth]) => (
+                  <SpreadRow
+                    key={cls}
+                    label={cls}
+                    values={monthPeriods.map(p => byMonth[p] ?? 0)}
+                    variant="detail"
+                    fmt={fmtCell}
+                  />
                 ))}
+                {expandedGroups.has('receitas') && Object.keys(spreadsheet.byClass).length === 0 && (
+                  <SpreadRow label="(sem lançamentos)" values={monthPeriods.map(() => 0)} variant="detail" fmt={fmtCell} empty />
+                )}
+
+                {/* ══ GRUPO: Entradas Não Operacionais ══ */}
+                <SpreadGroupHeader
+                  label="Entradas Não Operacionais"
+                  expanded={expandedGroups.has('entrada-manual')}
+                  onToggle={() => toggleGroup('entrada-manual')}
+                  values={monthPeriods.map(p =>
+                    Object.values(spreadsheet.byEntrada).reduce((s, v) => s + (v[p] ?? 0), 0)
+                  )}
+                  color="teal"
+                  fmt={fmtCell}
+                />
+                {expandedGroups.has('entrada-manual') && Object.entries(spreadsheet.byEntrada).map(([cat, byMonth]) => (
+                  <SpreadRow
+                    key={cat}
+                    label={cat}
+                    values={monthPeriods.map(p => byMonth[p] ?? 0)}
+                    variant="detail"
+                    fmt={fmtCell}
+                  />
+                ))}
+                {expandedGroups.has('entrada-manual') && Object.keys(spreadsheet.byEntrada).length === 0 && (
+                  <SpreadRow label="(sem lançamentos)" values={monthPeriods.map(() => 0)} variant="detail" fmt={fmtCell} empty />
+                )}
+
+                {/* ── Total Entradas ── */}
+                <SpreadRow
+                  label="Total Entradas"
+                  values={monthPeriods.map(p => spreadsheet.totalEntradaByMonth[p])}
+                  variant="total-green"
+                  fmt={fmtCell}
+                />
+
+                {/* ══ GRUPO: Saídas ══ */}
+                <SpreadGroupHeader
+                  label="Saídas"
+                  expanded={expandedGroups.has('saidas')}
+                  onToggle={() => toggleGroup('saidas')}
+                  values={monthPeriods.map(p =>
+                    Object.values(spreadsheet.bySaida).reduce((s, v) => s + (v[p] ?? 0), 0)
+                  )}
+                  color="red"
+                  fmt={fmtCell}
+                />
+                {expandedGroups.has('saidas') && Object.entries(spreadsheet.bySaida).map(([cat, byMonth]) => (
+                  <SpreadRow
+                    key={cat}
+                    label={cat}
+                    values={monthPeriods.map(p => byMonth[p] ?? 0)}
+                    variant="detail"
+                    fmt={fmtCell}
+                  />
+                ))}
+                {expandedGroups.has('saidas') && Object.keys(spreadsheet.bySaida).length === 0 && (
+                  <SpreadRow label="(sem lançamentos)" values={monthPeriods.map(() => 0)} variant="detail" fmt={fmtCell} empty />
+                )}
+
+                {/* ── Total Saídas ── */}
+                <SpreadRow
+                  label="Total Saídas"
+                  values={monthPeriods.map(p => spreadsheet.totalSaidaByMonth[p])}
+                  variant="total-red"
+                  fmt={fmtCell}
+                />
+
+                {/* ── Saldo Mensal ── */}
+                <SpreadRow
+                  label="Geração Líquida de Caixa"
+                  values={monthPeriods.map(p => spreadsheet.saldoMensal[p])}
+                  variant="saldo"
+                  fmt={fmtCell}
+                />
+
+                {/* ── Saldo Acumulado ── */}
+                <SpreadRow
+                  label="Saldo Final Acumulado"
+                  values={monthPeriods.map(p => spreadsheet.saldoAcumulado[p])}
+                  variant="highlight-blue"
+                  fmt={fmtCell}
+                />
+
               </tbody>
             </table>
           </div>
@@ -407,5 +594,108 @@ export default function FluxoPage() {
       />
 
     </div>
+  )
+}
+
+// ─── Componentes auxiliares do Spreadsheet ─────────────────────────────────
+
+type SpreadVariant = 'detail' | 'total-green' | 'total-red' | 'saldo' | 'highlight-blue'
+
+function SpreadGroupHeader({
+  label, expanded, onToggle, values, color, fmt,
+}: {
+  label: string
+  expanded: boolean
+  onToggle: () => void
+  values: number[]
+  color: 'green' | 'teal' | 'red'
+  fmt: (v: number) => string
+}) {
+  const bg = color === 'green' ? 'bg-green-700' : color === 'teal' ? 'bg-teal-700' : 'bg-red-700'
+  const total = values.reduce((s, v) => s + v, 0)
+  return (
+    <tr
+      className={`${bg} text-white cursor-pointer select-none hover:brightness-110 transition-all`}
+      onClick={onToggle}
+    >
+      <td className={`sticky left-0 z-10 ${bg} px-3 py-2 font-semibold`}>
+        <div className="flex items-center gap-1.5">
+          <ChevronDown
+            size={13}
+            className={`transition-transform flex-shrink-0 ${expanded ? '' : '-rotate-90'}`}
+          />
+          {label}
+        </div>
+      </td>
+      {values.map((v, i) => (
+        <td key={i} className={`px-2 py-2 text-right font-semibold ${v === 0 ? 'opacity-40' : ''}`}>
+          {fmt(v)}
+        </td>
+      ))}
+      <td className="px-2 py-2 text-right font-bold bg-black/10">
+        {fmt(total)}
+      </td>
+    </tr>
+  )
+}
+
+function SpreadRow({
+  label, values, variant, fmt, empty = false,
+}: {
+  label: string
+  values: number[]
+  variant: SpreadVariant
+  fmt: (v: number) => string
+  empty?: boolean
+}) {
+  const total = values.reduce((s, v) => s + v, 0)
+
+  const styles: Record<SpreadVariant, { row: string; cell: (v: number) => string; first: string; totalCell: string }> = {
+    detail: {
+      row: 'border-b border-slate-100 hover:bg-slate-50',
+      cell: () => 'text-slate-600',
+      first: 'sticky left-0 z-10 bg-white pl-7 pr-3 py-1.5 text-slate-600 font-normal',
+      totalCell: 'bg-slate-50 font-medium text-slate-700',
+    },
+    'total-green': {
+      row: 'bg-green-50 border-t-2 border-green-200',
+      cell: (v) => v >= 0 ? 'text-green-700 font-semibold' : 'text-red-600 font-semibold',
+      first: 'sticky left-0 z-10 bg-green-50 px-3 py-2 text-green-800 font-bold',
+      totalCell: 'bg-green-100 font-bold text-green-800',
+    },
+    'total-red': {
+      row: 'bg-red-50 border-t-2 border-red-200',
+      cell: () => 'text-red-700 font-semibold',
+      first: 'sticky left-0 z-10 bg-red-50 px-3 py-2 text-red-800 font-bold',
+      totalCell: 'bg-red-100 font-bold text-red-800',
+    },
+    saldo: {
+      row: 'bg-slate-700 text-white',
+      cell: (v) => v >= 0 ? 'text-green-300 font-bold' : 'text-red-300 font-bold',
+      first: 'sticky left-0 z-10 bg-slate-700 px-3 py-2.5 text-white font-bold',
+      totalCell: 'bg-slate-800 font-bold text-white',
+    },
+    'highlight-blue': {
+      row: 'bg-blue-600 text-white',
+      cell: (v) => v >= 0 ? 'text-blue-100 font-semibold' : 'text-orange-300 font-semibold',
+      first: 'sticky left-0 z-10 bg-blue-600 px-3 py-2.5 text-white font-bold',
+      totalCell: 'bg-blue-700 font-bold text-white',
+    },
+  }
+
+  const s = styles[variant]
+
+  return (
+    <tr className={s.row}>
+      <td className={s.first}>{label}</td>
+      {values.map((v, i) => (
+        <td key={i} className={`px-2 py-1.5 text-right ${s.cell(v)} ${v === 0 && !empty ? 'opacity-40' : ''}`}>
+          {empty ? '—' : fmt(v)}
+        </td>
+      ))}
+      <td className={`px-2 py-1.5 text-right ${s.totalCell}`}>
+        {empty ? '—' : fmt(total)}
+      </td>
+    </tr>
   )
 }
