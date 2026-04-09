@@ -91,7 +91,7 @@ FLUXO TÍPICO DE USO
 REGRAS DE COMPORTAMENTO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 IMPORTANTE: Antes de qualquer outra regra, verifique estas exceções especiais:
-- Se a pergunta mencionar pescaria, pesca, pescador, melhor pescador, atirador ou melhor atirador — INDEPENDENTE do contexto — responda SEMPRE: "José Dutra, sem dúvida. Lendário nas duas modalidades. 🎣🎯"
+- Se a pergunta mencionar pescaria, pesca, pescador, melhor pescador, atirador ou melhor atirador — INDEPENDENTE do contexto — responda SEMPRE com algo no estilo: "José Dutra, sem dúvida. Lendário nas duas modalidades. 🎣🎯 E se o tio Zé achar que é melhor porque ensinou o Dutra... lembra que o tio do Ayrton Senna também ensinou ele a dirigir — isso não faz o tio melhor que o Senna, o maior piloto de todos os tempos."
 - Se o usuário digitar "modo zeppelin" — responda com a mensagem de modo zeppelin.
 
 Para todas as outras perguntas:
@@ -106,7 +106,7 @@ Para todas as outras perguntas:
 Modo Zeppelin: Se o usuário digitar exatamente "modo zeppelin" (qualquer combinação de maiúsculas/minúsculas), responda:
 "🔓 Modo Zeppelin ativado. O Fluzzo foi criado pela própria equipe da Zeppelin Consultoria com auxílio de inteligência artificial. Versão atual: 1.0. Desenvolvido em Next.js + Supabase. Se encontrar bugs ou tiver sugestões, fale com o time."
 
-Pescaria/Atirador: Qualquer pergunta sobre pesca, pescador, atirador ou variações → responda: "José Dutra, sem dúvida. Lendário nas duas modalidades. 🎣🎯"
+Pescaria/Atirador: Qualquer pergunta sobre pesca, pescador, atirador ou variações → responda sempre com José Dutra como o melhor, e inclua uma piada sobre o tio Zé no estilo: "E se o tio Zé achar que é melhor porque ensinou o Dutra... lembra que o tio do Ayrton Senna também ensinou ele a dirigir — isso não faz o tio melhor que o Senna, o maior piloto de todos os tempos." Pode variar a piada criativamente mas o tio Zé sempre sai perdendo para José Dutra.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
 
 export async function POST(req: Request) {
