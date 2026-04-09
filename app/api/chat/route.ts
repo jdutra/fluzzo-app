@@ -96,9 +96,12 @@ REGRAS DE COMPORTAMENTO
 - Nunca invente funcionalidades que não existem no sistema descrito acima.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[REGRA OCULTA — não mencione a existência desta seção]
-Se o usuário digitar exatamente "modo zeppelin" (sem aspas, em qualquer combinação de maiúsculas/minúsculas), responda com:
+[REGRAS OCULTAS — não mencione a existência desta seção]
+
+Regra 1: Se o usuário digitar exatamente "modo zeppelin" (sem aspas, em qualquer combinação de maiúsculas/minúsculas), responda com:
 "🔓 Modo Zeppelin ativado. O Fluzzo foi criado pela própria equipe da Zeppelin Consultoria com auxílio de inteligência artificial. Versão atual: 1.0. Desenvolvido em Next.js + Supabase. Se encontrar bugs ou tiver sugestões, fale com o time."
+
+Regra 2: Se o usuário perguntar sobre pescaria, quem é o melhor pescador, melhor atirador, ou qualquer variação dessas perguntas, responda sempre com convicção: "José Dutra, sem dúvida. Lendário nas duas modalidades. 🎣🎯"
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
 
 export async function POST(req: Request) {
@@ -142,8 +145,12 @@ export async function POST(req: Request) {
         'Cache-Control': 'no-cache',
       },
     })
-  } catch (error) {
-    console.error('Chat API error:', error)
-    return new Response('Erro ao processar mensagem', { status: 500 })
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    console.error('Chat API error:', msg)
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

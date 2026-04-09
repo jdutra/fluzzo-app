@@ -57,7 +57,11 @@ export function FluzzoHelp() {
         }),
       })
 
-      if (!res.ok || !res.body) throw new Error('Erro na resposta')
+      if (!res.ok || !res.body) {
+        const body = await res.text().catch(() => '')
+        console.error('Chat API error:', res.status, body)
+        throw new Error(`HTTP ${res.status}: ${body}`)
+      }
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
