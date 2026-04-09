@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Topbar } from '@/components/layout/topbar'
 import { Toaster } from '@/components/ui/toaster'
+import { FluzzoHelp } from '@/components/shared/fluzzo-help'
 
 export default async function DashboardLayout({
   children,
@@ -26,6 +27,7 @@ export default async function DashboardLayout({
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
       <Toaster />
+      <FluzzoHelp />
     </div>
   )
 }
