@@ -347,6 +347,29 @@ export type AuditLog = {
   changed_at: string
 }
 
+// KPI component: describes one "slice" of the formula
+// type: 'entries-classification' | 'entries-all' | 'manual-category' | 'manual-all'
+// category: classification name (for entries-classification) or category name (for manual-category)
+// sign: 1 (add) | -1 (subtract)
+export type KpiComponent = {
+  type: 'entries-classification' | 'entries-all' | 'manual-category' | 'manual-all'
+  category?: string
+  sign: 1 | -1
+}
+
+export type KpiIndicator = {
+  id: string
+  company_id: string | null
+  name: string
+  color: string
+  components: KpiComponent[]
+  show_percent: boolean
+  percent_base_components: KpiComponent[]
+  sort_order: number
+  active: boolean
+  created_at: string
+}
+
 // ─── Views ────────────────────────────────────────────────────
 
 export type VwCashForecast = {
@@ -506,6 +529,42 @@ export type Database = {
         Row: AuditLog
         Insert: Omit<AuditLog, 'id' | 'changed_at'>
         Update: never
+        Relationships: []
+      }
+      classifications: {
+        Row: Classification
+        Insert: Omit<Classification, 'id' | 'created_at'>
+        Update: Partial<Omit<Classification, 'id' | 'created_at'>>
+        Relationships: []
+      }
+      lead_products: {
+        Row: LeadProduct
+        Insert: Omit<LeadProduct, 'id' | 'created_at'>
+        Update: Partial<Omit<LeadProduct, 'id'>>
+        Relationships: []
+      }
+      project_products: {
+        Row: ProjectProduct
+        Insert: Omit<ProjectProduct, 'id' | 'created_at'>
+        Update: Partial<Omit<ProjectProduct, 'id'>>
+        Relationships: []
+      }
+      vendedores: {
+        Row: Vendedor
+        Insert: Omit<Vendedor, 'id' | 'created_at'>
+        Update: Partial<Omit<Vendedor, 'id' | 'created_at'>>
+        Relationships: []
+      }
+      kpi_indicators: {
+        Row: KpiIndicator
+        Insert: Omit<KpiIndicator, 'id' | 'created_at'>
+        Update: Partial<Omit<KpiIndicator, 'id' | 'created_at'>>
+        Relationships: []
+      }
+      client_contacts: {
+        Row: ClientContact
+        Insert: Omit<ClientContact, 'id' | 'created_at'>
+        Update: Partial<Omit<ClientContact, 'id' | 'created_at'>>
         Relationships: []
       }
     }

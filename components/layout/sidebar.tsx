@@ -22,6 +22,7 @@ import {
   Tag,
   Landmark,
   UserCircle2,
+  Gauge,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -48,6 +49,7 @@ const navItems: NavItem[] = [
   { href: '/projetos', label: 'Projetos', icon: FolderKanban, group: 'Vendas' },
   // Gestão
   { href: '/metas', label: 'Metas', icon: Target, group: 'Gestão' },
+  { href: '/indicadores', label: 'Indicadores', icon: Gauge, group: 'Gestão' },
   // Financeiro
   { href: '/lancamentos', label: 'Lançamentos', icon: Receipt, group: 'Financeiro' },
   { href: '/fluxo', label: 'Fluxo de Caixa', icon: BarChart3, group: 'Financeiro' },
