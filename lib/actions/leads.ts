@@ -19,10 +19,10 @@ export async function convertLeadToProject(leadId: string) {
 
   if (leadError || !lead) throw leadError ?? new Error('Lead não encontrado')
 
-  // Busca produtos do lead
+  // Busca produtos do lead (incluindo valor negociado)
   const { data: leadProducts } = await supabase
     .from('lead_products')
-    .select('product_id')
+    .select('product_id, value')
     .eq('lead_id', leadId)
 
   // Cria o projeto
@@ -42,12 +42,13 @@ export async function convertLeadToProject(leadId: string) {
 
   if (projectError) throw projectError
 
-  // Copia os produtos do lead para o projeto
+  // Copia os produtos do lead para o projeto (incluindo valor negociado)
   if (leadProducts && leadProducts.length > 0) {
     await supabase.from('project_products').insert(
       leadProducts.map((lp) => ({
         project_id: project.id,
         product_id: lp.product_id,
+        value: (lp as any).value ?? null,
       }))
     )
   }

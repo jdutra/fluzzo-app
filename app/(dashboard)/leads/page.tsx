@@ -147,6 +147,114 @@ function KanbanColumn({
   )
 }
 
+// ─── Lead Table Row ────────────────────────────────────────────────────────
+
+function LeadRow({
+  lead, today, onEdit, onDelete, onConvert,
+}: {
+  lead: LeadWithRelations
+  today: string
+  onEdit: (lead: LeadWithRelations) => void
+  onDelete: (lead: Lead) => void
+  onConvert: (lead: Lead) => void
+}) {
+  const isStale = !['fechado', 'perdido'].includes(lead.stage) && daysSince(lead.updated_at) > STALE_DAYS
+  const isOverdue = !!(lead.next_step_date && lead.next_step_date < today)
+  const canConvert = lead.stage !== 'perdido' && !lead.converted_project_id
+
+  return (
+    <tr className="hover:bg-slate-50 transition-colors">
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          {isStale && <AlertTriangle size={13} className="text-orange-500 flex-shrink-0" />}
+          <Link href={`/leads/${lead.id}`} className="font-medium text-slate-900 hover:text-teal-600 truncate max-w-[180px]">
+            {lead.title}
+          </Link>
+          {lead.converted_project_id && (
+            <Badge className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0">Convertido</Badge>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-3 text-slate-600 hidden sm:table-cell">
+        {lead.client?.name ?? <span className="text-slate-400">—</span>}
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex flex-wrap gap-1">
+          {(lead.lead_products ?? []).length > 0
+            ? (lead.lead_products ?? []).map((lp) => lp.product && (
+              <span key={lp.product.id} className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">
+                {lp.product.sigla}
+              </span>
+            ))
+            : <span className="text-slate-400 text-xs">—</span>
+          }
+        </div>
+      </td>
+      <td className="px-4 py-3 text-right font-medium text-slate-700 hidden sm:table-cell">
+        {lead.estimated_value != null ? formatCurrencyCompact(lead.estimated_value) : <span className="text-slate-400">—</span>}
+      </td>
+      <td className="px-4 py-3">
+        <Badge className={LEAD_STAGE_COLORS[lead.stage]}>{LEAD_STAGE_LABELS[lead.stage]}</Badge>
+      </td>
+      <td className="px-4 py-3 text-center hidden lg:table-cell">
+        {lead.created_at ? (
+          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+            daysSince(lead.created_at) > 30 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {daysSince(lead.created_at)}d
+          </span>
+        ) : <span className="text-slate-400">—</span>}
+      </td>
+      <td className="px-4 py-3 text-slate-600 hidden lg:table-cell">
+        {lead.responsible ?? <span className="text-slate-400">—</span>}
+      </td>
+      <td className="px-4 py-3 text-slate-600 max-w-[160px] hidden xl:table-cell">
+        {lead.next_step ? (
+          <div>
+            <p className="truncate text-xs">{lead.next_step}</p>
+            {lead.next_step_date && (
+              <p className={`text-[11px] ${isOverdue ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
+                {isOverdue ? '⚠ ' : ''}{formatDate(lead.next_step_date)}
+              </p>
+            )}
+          </div>
+        ) : <span className="text-slate-400">—</span>}
+      </td>
+      <td className="px-4 py-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreHorizontal size={15} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link href={`/leads/${lead.id}`} className="flex items-center gap-2 cursor-pointer">
+                <Eye size={14} /> Ver detalhes
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onEdit(lead)} className="gap-2">
+              <Pencil size={14} /> Editar
+            </DropdownMenuItem>
+            {canConvert && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => onConvert(lead)} className="gap-2 text-teal-600 focus:text-teal-700">
+                  <ArrowRightCircle size={14} /> Converter em projeto
+                </DropdownMenuItem>
+              </>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onDelete(lead)} className="gap-2 text-red-500 focus:text-red-600">
+              <Trash2 size={14} /> Remover
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </td>
+    </tr>
+  )
+}
+
 export default function LeadsPage() {
   const supabase = createClient()
   const queryClient = useQueryClient()
@@ -285,23 +393,28 @@ export default function LeadsPage() {
 
   const today = new Date().toISOString().split('T')[0]
 
-  // Leads com follow-up pendente (data passada ou hoje, não fechado/perdido)
-  const followupLeads = useMemo(() => leads.filter(
+  // Follow-up: atrasados (data passada) e agendados (hoje/futuro)
+  const overdueLeads = useMemo(() => leads.filter(
     (l) => !['fechado', 'perdido'].includes(l.stage) &&
-      l.next_step_date && l.next_step_date <= today
+      l.next_step_date && l.next_step_date < today
   ), [leads, today])
+
+  const scheduledLeads = useMemo(() => leads.filter(
+    (l) => !['fechado', 'perdido'].includes(l.stage) &&
+      l.next_step_date && l.next_step_date >= today
+  ), [leads, today])
+
+  const followupLeads = useMemo(
+    () => [...overdueLeads, ...scheduledLeads],
+    [overdueLeads, scheduledLeads]
+  )
 
   const staleCount = leads.filter(
     (l) => !['fechado', 'perdido'].includes(l.stage) && daysSince(l.updated_at) > STALE_DAYS
   ).length
 
   const searchLower = search.toLowerCase()
-  const filtered = (viewMode === 'followup'
-    ? followupLeads
-    : stageFilter === 'all'
-    ? leads
-    : leads.filter((l) => l.stage === stageFilter)
-  ).filter((l) => {
+  const matchesSearch = (l: LeadWithRelations): boolean => {
     if (!searchLower) return true
     const productNames = (l.lead_products ?? []).map((lp) =>
       `${lp.product?.name ?? ''} ${lp.product?.sigla ?? ''}`
@@ -312,7 +425,15 @@ export default function LeadsPage() {
       (l.responsible ?? '').toLowerCase().includes(searchLower) ||
       productNames.includes(searchLower)
     )
-  })
+  }
+
+  const filtered = (stageFilter === 'all'
+    ? leads
+    : leads.filter((l) => l.stage === stageFilter)
+  ).filter(matchesSearch)
+
+  const filteredOverdue = overdueLeads.filter(matchesSearch)
+  const filteredScheduled = scheduledLeads.filter(matchesSearch)
 
   const countByStage = ALL_STAGES.reduce<Record<string, number>>((acc, s) => {
     acc[s] = leads.filter((l) => l.stage === s).length
@@ -433,7 +554,10 @@ export default function LeadsPage() {
           >
             <CalendarClock size={13} /> Follow-up
             {followupLeads.length > 0 && (
-              <span className={`ml-1 px-1.5 py-0 rounded-full text-[10px] font-bold ${viewMode === 'followup' ? 'bg-white text-teal-700' : 'bg-orange-100 text-orange-700'}`}>
+              <span className={`ml-1 px-1.5 py-0 rounded-full text-[10px] font-bold ${
+                viewMode === 'followup' ? 'bg-white text-teal-700' :
+                overdueLeads.length > 0 ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
+              }`}>
                 {followupLeads.length}
               </span>
             )}
@@ -465,7 +589,10 @@ export default function LeadsPage() {
           <p className="text-sm text-slate-500">
             {followupLeads.length === 0
               ? 'Nenhum follow-up pendente — tudo em dia!'
-              : `${followupLeads.length} lead${followupLeads.length > 1 ? 's' : ''} com follow-up pendente ou atrasado`
+              : [
+                  overdueLeads.length > 0 ? `${overdueLeads.length} atrasado${overdueLeads.length !== 1 ? 's' : ''}` : '',
+                  scheduledLeads.length > 0 ? `${scheduledLeads.length} agendado${scheduledLeads.length !== 1 ? 's' : ''}` : '',
+                ].filter(Boolean).join(' · ')
             }
           </p>
         )}
@@ -512,8 +639,8 @@ export default function LeadsPage() {
         </div>
       )}
 
-      {/* LIST / FOLLOW-UP VIEW */}
-      {(viewMode === 'list' || viewMode === 'followup') && (
+      {/* LIST VIEW */}
+      {viewMode === 'list' && (
         <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
           {isLoading ? (
             <div className="p-8 space-y-3">
@@ -523,10 +650,10 @@ export default function LeadsPage() {
             </div>
           ) : filtered.length === 0 ? (
             <EmptyState
-              icon={viewMode === 'followup' ? CalendarClock : TrendingUp}
-              title={viewMode === 'followup' ? 'Nenhum follow-up pendente' : 'Nenhum lead encontrado'}
-              description={viewMode === 'followup' ? 'Todos os follow-ups estão em dia!' : stageFilter !== 'all' ? `Não há leads em "${LEAD_STAGE_LABELS[stageFilter]}"` : 'Cadastre o primeiro lead para iniciar o pipeline.'}
-              action={stageFilter === 'all' && viewMode === 'list' ? { label: 'Novo Lead', onClick: openCreate } : undefined}
+              icon={TrendingUp}
+              title="Nenhum lead encontrado"
+              description={stageFilter !== 'all' ? `Não há leads em "${LEAD_STAGE_LABELS[stageFilter]}"` : 'Cadastre o primeiro lead para iniciar o pipeline.'}
+              action={stageFilter === 'all' ? { label: 'Novo Lead', onClick: openCreate } : undefined}
             />
           ) : (
             <div className="overflow-x-auto">
@@ -545,108 +672,83 @@ export default function LeadsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtered.map((lead) => {
-                    const isStale = !['fechado', 'perdido'].includes(lead.stage) && daysSince(lead.updated_at) > STALE_DAYS
-                    const isOverdue = lead.next_step_date && lead.next_step_date < today
-                    const canConvert = lead.stage !== 'perdido' && !lead.converted_project_id
-
-                    return (
-                      <tr key={lead.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            {isStale && <AlertTriangle size={13} className="text-orange-500 flex-shrink-0" />}
-                            <Link href={`/leads/${lead.id}`} className="font-medium text-slate-900 hover:text-teal-600 truncate max-w-[180px]">
-                              {lead.title}
-                            </Link>
-                            {lead.converted_project_id && (
-                              <Badge className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0">Convertido</Badge>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 hidden sm:table-cell">
-                          {lead.client?.name ?? <span className="text-slate-400">—</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-1">
-                            {(lead.lead_products ?? []).length > 0
-                              ? (lead.lead_products ?? []).map((lp) => lp.product && (
-                                <span key={lp.product.id} className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">
-                                  {lp.product.sigla}
-                                </span>
-                              ))
-                              : <span className="text-slate-400 text-xs">—</span>
-                            }
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right font-medium text-slate-700 hidden sm:table-cell">
-                          {lead.estimated_value != null ? formatCurrencyCompact(lead.estimated_value) : <span className="text-slate-400">—</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge className={LEAD_STAGE_COLORS[lead.stage]}>
-                            {LEAD_STAGE_LABELS[lead.stage]}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-center hidden lg:table-cell">
-                          {lead.created_at ? (
-                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                              daysSince(lead.created_at) > 30 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
-                            }`}>
-                              {daysSince(lead.created_at)}d
-                            </span>
-                          ) : <span className="text-slate-400">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 hidden lg:table-cell">
-                          {lead.responsible ?? <span className="text-slate-400">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 max-w-[160px] hidden xl:table-cell">
-                          {lead.next_step ? (
-                            <div>
-                              <p className="truncate text-xs">{lead.next_step}</p>
-                              {lead.next_step_date && (
-                                <p className={`text-[11px] ${isOverdue ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
-                                  {isOverdue ? '⚠ ' : ''}{formatDate(lead.next_step_date)}
-                                </p>
-                              )}
-                            </div>
-                          ) : <span className="text-slate-400">—</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal size={15} />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem asChild>
-                                <Link href={`/leads/${lead.id}`} className="flex items-center gap-2 cursor-pointer">
-                                  <Eye size={14} /> Ver detalhes
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openEdit(lead)} className="gap-2">
-                                <Pencil size={14} /> Editar
-                              </DropdownMenuItem>
-                              {canConvert && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => setConvertTarget(lead)} className="gap-2 text-teal-600 focus:text-teal-700">
-                                    <ArrowRightCircle size={14} /> Converter em projeto
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => setDeleteTarget(lead)} className="gap-2 text-red-500 focus:text-red-600">
-                                <Trash2 size={14} /> Remover
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {filtered.map((lead) => <LeadRow key={lead.id} lead={lead} today={today}
+                    onEdit={openEdit} onDelete={setDeleteTarget} onConvert={setConvertTarget} />)}
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* FOLLOW-UP VIEW */}
+      {viewMode === 'followup' && !isLoading && (
+        <div className="space-y-4">
+          {filteredOverdue.length === 0 && filteredScheduled.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <EmptyState icon={CalendarClock} title="Nenhum follow-up pendente" description="Todos os follow-ups estão em dia!" />
+            </div>
+          ) : (
+            <>
+              {filteredOverdue.length > 0 && (
+                <div className="rounded-xl border border-red-200 bg-white overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-red-100 bg-red-50">
+                    <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">Atrasados</span>
+                    <span className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">{filteredOverdue.length}</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50">
+                          <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Título</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden sm:table-cell">Cliente</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Produtos</th>
+                          <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden sm:table-cell">Valor</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Estágio</th>
+                          <th className="text-center px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden lg:table-cell">Dias</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden lg:table-cell">Responsável</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden xl:table-cell">Próximo passo</th>
+                          <th className="px-4 py-3" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredOverdue.map((lead) => <LeadRow key={lead.id} lead={lead} today={today}
+                          onEdit={openEdit} onDelete={setDeleteTarget} onConvert={setConvertTarget} />)}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {filteredScheduled.length > 0 && (
+                <div className="rounded-xl border border-blue-200 bg-white overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-blue-100 bg-blue-50">
+                    <span className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Agendados</span>
+                    <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">{filteredScheduled.length}</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50">
+                          <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Título</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden sm:table-cell">Cliente</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Produtos</th>
+                          <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden sm:table-cell">Valor</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Estágio</th>
+                          <th className="text-center px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden lg:table-cell">Dias</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden lg:table-cell">Responsável</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden xl:table-cell">Próximo passo</th>
+                          <th className="px-4 py-3" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredScheduled.map((lead) => <LeadRow key={lead.id} lead={lead} today={today}
+                          onEdit={openEdit} onDelete={setDeleteTarget} onConvert={setConvertTarget} />)}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/use-toast'
 import { formatCurrency } from '@/lib/utils'
-import { UserCheck, Pencil, Trash2, Search, Mail, Phone } from 'lucide-react'
+import { UserCheck, Pencil, Trash2, Search, Mail, Phone, FileCheck, FileX } from 'lucide-react'
 import type { Consultant } from '@/lib/supabase/types'
 
 export default function ConsultoresPage() {
@@ -82,6 +82,7 @@ export default function ConsultoresPage() {
                 <th className="text-left px-4 py-3 font-medium text-slate-600 hidden xl:table-cell">PIX PJ</th>
                 <th className="text-right px-4 py-3 font-medium text-slate-600 hidden lg:table-cell">A Pagar</th>
                 <th className="text-right px-4 py-3 font-medium text-slate-600 hidden lg:table-cell">Pago</th>
+                <th className="text-center px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Contrato</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
                 <th className="px-4 py-3 w-20" />
               </tr>
@@ -113,6 +114,23 @@ export default function ConsultoresPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right hidden lg:table-cell text-slate-600">{formatCurrency(c.amount_paid)}</td>
+                  <td className="px-4 py-3 text-center hidden md:table-cell">
+                    {c.has_contract ? (
+                      <span title="Contrato assinado">
+                        {c.contract_url ? (
+                          <a href={c.contract_url} target="_blank" rel="noopener noreferrer">
+                            <FileCheck size={16} className="text-green-600 mx-auto" />
+                          </a>
+                        ) : (
+                          <FileCheck size={16} className="text-green-600 mx-auto" />
+                        )}
+                      </span>
+                    ) : (
+                      <span title="Sem contrato assinado">
+                        <FileX size={16} className="text-red-400 mx-auto" />
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <Badge variant="outline"
                       className={c.active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-500'}>

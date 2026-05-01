@@ -23,6 +23,9 @@ const schema = z.object({
   pix_pj: z.string().optional(),
   notes: z.string().optional(),
   active: z.boolean(),
+  start_date: z.string().optional(),
+  has_contract: z.boolean(),
+  contract_url: z.string().optional(),
 })
 type FormData = z.infer<typeof schema>
 
@@ -47,8 +50,10 @@ export function ConsultantSheet({ open, onOpenChange, consultant, onSuccess }: C
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { active: true },
+    defaultValues: { active: true, has_contract: false },
   })
+
+  const hasContract = watch('has_contract')
 
   useEffect(() => {
     if (open) {
@@ -61,9 +66,12 @@ export function ConsultantSheet({ open, onOpenChange, consultant, onSuccess }: C
           pix_pj: consultant.pix_pj ?? '',
           notes: consultant.notes ?? '',
           active: consultant.active,
+          start_date: consultant.start_date ?? '',
+          has_contract: consultant.has_contract ?? false,
+          contract_url: consultant.contract_url ?? '',
         })
       } else {
-        reset({ active: true })
+        reset({ active: true, has_contract: false })
       }
     }
   }, [open, consultant, reset])
@@ -79,6 +87,9 @@ export function ConsultantSheet({ open, onOpenChange, consultant, onSuccess }: C
         notes: data.notes || null,
         active: data.active,
         company_id: company?.id ?? null,
+        start_date: data.start_date || null,
+        has_contract: data.has_contract,
+        contract_url: data.contract_url || null,
       }
       if (isEditing) {
         const { error } = await supabase.from('consultants').update(payload).eq('id', consultant.id)
@@ -112,6 +123,12 @@ export function ConsultantSheet({ open, onOpenChange, consultant, onSuccess }: C
               {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
             </div>
 
+            <div className="space-y-1.5">
+              <Label htmlFor="start_date">Data de início</Label>
+              <Input id="start_date" type="date" {...register('start_date')} />
+              <p className="text-xs text-muted-foreground">Data em que começou a trabalhar com a Fluzzo</p>
+            </div>
+
             {/* Contato */}
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide pt-1">Contato</p>
             <div className="space-y-1.5">
@@ -136,6 +153,30 @@ export function ConsultantSheet({ open, onOpenChange, consultant, onSuccess }: C
               <Input id="pix_pj" {...register('pix_pj')} placeholder="CNPJ ou e-mail empresarial" />
               <p className="text-xs text-muted-foreground">Para pagamentos via empresa do consultor</p>
             </div>
+
+            {/* Contrato */}
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide pt-1">Contrato</p>
+            <div className="flex items-center gap-3">
+              <input
+                id="has_contract"
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-teal-600"
+                checked={hasContract}
+                onChange={(e) => setValue('has_contract', e.target.checked)}
+              />
+              <Label htmlFor="has_contract" className="cursor-pointer">Contrato assinado</Label>
+            </div>
+            {hasContract && (
+              <div className="space-y-1.5">
+                <Label htmlFor="contract_url">Link do contrato</Label>
+                <Input
+                  id="contract_url"
+                  {...register('contract_url')}
+                  placeholder="https://drive.google.com/..."
+                />
+                <p className="text-xs text-muted-foreground">Cole o link do contrato (Google Drive, Notion etc.)</p>
+              </div>
+            )}
 
             {/* Observações + Status */}
             <div className="space-y-1.5">

@@ -57,6 +57,8 @@ export type Company = {
   default_class_fee: string | null
   default_class_imposto: string | null
   default_class_consultor: string | null
+  saldo_inicial: number
+  data_saldo_inicial: string | null
   created_at: string
 }
 
@@ -123,6 +125,9 @@ export type Consultant = {
   notes: string | null
   amount_due: number
   amount_paid: number
+  start_date: string | null
+  has_contract: boolean
+  contract_url: string | null
   created_at: string
 }
 
@@ -239,6 +244,7 @@ export type ProjectProduct = {
   id: string
   project_id: string
   product_id: string
+  value: number | null
   created_at: string
 }
 
@@ -263,6 +269,7 @@ export type ProjectPartner = {
   fee_amount: number
   fee_paid: number
   balance: number // generated always
+  installments: number
 }
 
 export type Entry = {
@@ -271,6 +278,7 @@ export type Entry = {
   company_id: string | null
   client_id: string | null
   consultant_id: string | null
+  partner_id: string | null
   classification: string
   installment: number | null
   order_num: number
@@ -432,7 +440,7 @@ export type Database = {
       companies: {
         Row: Company
         Insert: Omit<Company, 'id' | 'created_at'>
-        Update: Partial<Omit<Company, 'id' | 'created_at'>>
+        Update: Partial<Omit<Company, 'id' | 'created_at' | 'saldo_inicial'>> & { saldo_inicial?: number }
         Relationships: []
       }
       products: {
@@ -546,7 +554,7 @@ export type Database = {
       project_products: {
         Row: ProjectProduct
         Insert: Omit<ProjectProduct, 'id' | 'created_at'>
-        Update: Partial<Omit<ProjectProduct, 'id'>>
+        Update: Partial<Omit<ProjectProduct, 'id' | 'created_at'>>
         Relationships: []
       }
       vendedores: {
@@ -565,6 +573,12 @@ export type Database = {
         Row: ClientContact
         Insert: Omit<ClientContact, 'id' | 'created_at'>
         Update: Partial<Omit<ClientContact, 'id' | 'created_at'>>
+        Relationships: []
+      }
+      company_contacts: {
+        Row: CompanyContact
+        Insert: Omit<CompanyContact, 'id' | 'created_at'>
+        Update: Partial<Omit<CompanyContact, 'id' | 'created_at'>>
         Relationships: []
       }
     }

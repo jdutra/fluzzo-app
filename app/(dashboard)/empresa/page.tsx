@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
 import { Loader2, Building2, Save, CheckCircle2, Plus, Trash2, Mail, Phone, User } from 'lucide-react'
-import { formatCNPJ } from '@/lib/utils'
+import { formatCNPJ, formatCurrency } from '@/lib/utils'
 import type { Company, CompanyContact } from '@/lib/supabase/types'
 
 const schema = z.object({
@@ -22,6 +22,8 @@ const schema = z.object({
   state: z.string().max(2).optional(),
   encargo_simples: z.coerce.number().min(0).max(100),
   encargo_retirada: z.coerce.number().min(0).max(100),
+  saldo_inicial: z.coerce.number().min(0).default(0),
+  data_saldo_inicial: z.string().optional(),
 })
 type FormData = z.infer<typeof schema>
 
@@ -64,7 +66,7 @@ export default function EmpresaPage() {
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { encargo_simples: 15, encargo_retirada: 19 },
+    defaultValues: { encargo_simples: 15, encargo_retirada: 19, saldo_inicial: 0 },
   })
 
   const contactForm = useForm<ContactFormData>({ resolver: zodResolver(contactSchema) })
@@ -78,6 +80,8 @@ export default function EmpresaPage() {
         state: company.state ?? '',
         encargo_simples: company.encargo_simples * 100,
         encargo_retirada: company.encargo_retirada * 100,
+        saldo_inicial: company.saldo_inicial ?? 0,
+        data_saldo_inicial: company.data_saldo_inicial ?? '',
       })
     }
   }, [company, reset])
@@ -91,6 +95,8 @@ export default function EmpresaPage() {
         state: data.state?.toUpperCase() || null,
         encargo_simples: data.encargo_simples / 100,
         encargo_retirada: data.encargo_retirada / 100,
+        saldo_inicial: data.saldo_inicial ?? 0,
+        data_saldo_inicial: data.data_saldo_inicial || null,
       }
       if (company) {
         const { error } = await supabase.from('companies').update(payload).eq('id', company.id)
@@ -267,6 +273,32 @@ export default function EmpresaPage() {
               <p className="font-medium text-slate-700">Como são usados:</p>
               <p>• <strong>Encargo Simples:</strong> deduzido da receita para calcular margem bruta estimada</p>
               <p>• <strong>Encargo Retirada:</strong> aplicado sobre retirada do sócio nos relatórios gerenciais</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Fluxo de Caixa */}
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base">Fluxo de Caixa</CardTitle>
+            <CardDescription>
+              Saldo inicial usado como ponto de partida do fluxo previsto.
+              O saldo inicial do previsto é sempre o saldo final do mês anterior do realizado.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="saldo_inicial">Saldo inicial (R$)</Label>
+                <Input id="saldo_inicial" type="number" step="0.01" min="0"
+                  {...register('saldo_inicial')} placeholder="0,00" />
+                {errors.saldo_inicial && <p className="text-xs text-red-500">{errors.saldo_inicial.message}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="data_saldo_inicial">Data do saldo inicial</Label>
+                <Input id="data_saldo_inicial" type="date" {...register('data_saldo_inicial')} />
+                <p className="text-xs text-muted-foreground">Data de referência do saldo informado acima</p>
+              </div>
             </div>
           </CardContent>
         </Card>

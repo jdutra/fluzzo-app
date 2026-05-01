@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
@@ -19,6 +19,8 @@ import { Loader2, Check, X } from 'lucide-react'
 import type { Lead } from '@/lib/supabase/types'
 import { LEAD_STAGE_LABELS } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { ConfirmDialog } from '@/components/shared/confirm-dialog'
+import { convertLeadToProject } from '@/lib/actions/leads'
 
 const STAGES = ['qualificacao', 'diagnostico', 'proposta', 'negociacao', 'fechado', 'perdido'] as const
 
@@ -47,8 +49,11 @@ type ProductRow = { id: string; value: number }
 
 export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProps) {
   const supabase = createClient()
+  const queryClient = useQueryClient()
   const isEditing = !!lead
   const [selectedProducts, setSelectedProducts] = useState<ProductRow[]>([])
+  const [showConvertDialog, setShowConvertDialog] = useState(false)
+  const [pendingConvertLeadId, setPendingConvertLeadId] = useState<string | null>(null)
 
   const { data: company } = useQuery({
     queryKey: ['company'],
@@ -157,6 +162,22 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
     setSelectedProducts((prev) => prev.map((p) => p.id === id ? { ...p, value } : p))
   }
 
+  const convertMutation = useMutation({
+    mutationFn: async (leadId: string) => convertLeadToProject(leadId),
+    onSuccess: () => {
+      toast({ title: 'Lead convertido em projeto com sucesso!' })
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      setShowConvertDialog(false)
+      setPendingConvertLeadId(null)
+    },
+    onError: (e: Error) => {
+      toast({ title: 'Erro ao converter.', description: e.message, variant: 'destructive' })
+      setShowConvertDialog(false)
+      setPendingConvertLeadId(null)
+    },
+  })
+
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       const payload = {
@@ -197,16 +218,35 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
         // lead_products pode não existir ainda (migration 006 pendente)
         console.warn('lead_products sync skipped — migration 006 may not have been applied.')
       }
+
+      return { leadId, stage: data.stage }
     },
-    onSuccess: () => {
+    onSuccess: ({ leadId, stage }) => {
       toast({ title: isEditing ? 'Lead atualizado.' : 'Lead cadastrado.' })
       onSuccess()
+      if (stage === 'fechado' && !lead?.converted_project_id) {
+        setPendingConvertLeadId(leadId)
+        setShowConvertDialog(true)
+      }
     },
     onError: (e: Error) => toast({ title: 'Erro ao salvar.', description: e.message, variant: 'destructive' }),
   })
 
   return (
     <>
+      <ConfirmDialog
+        open={showConvertDialog}
+        onOpenChange={(v) => {
+          if (!v) { setShowConvertDialog(false); setPendingConvertLeadId(null) }
+        }}
+        title="Converter em projeto"
+        description="Este lead foi marcado como fechado. Deseja convertê-lo em projeto agora?"
+        confirmLabel="Sim, converter"
+        cancelLabel="Apenas salvar"
+        variant="default"
+        loading={convertMutation.isPending}
+        onConfirm={() => pendingConvertLeadId && convertMutation.mutate(pendingConvertLeadId)}
+      />
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader className="mb-6">
@@ -315,8 +355,9 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
               <Label htmlFor="estimated_value">Valor total (R$)</Label>
               <Input id="estimated_value" type="number" step="0.01" min="0"
                 {...register('estimated_value')} placeholder="0,00"
-                className={productsTotal > 0 ? 'bg-teal-50 font-medium' : ''} />
-              {productsTotal > 0 && <p className="text-[10px] text-teal-600">Auto-calculado pela soma dos produtos</p>}
+                readOnly={selectedProducts.length > 0}
+                className={selectedProducts.length > 0 ? 'bg-teal-50 font-medium cursor-not-allowed' : ''} />
+              {selectedProducts.length > 0 && <p className="text-[10px] text-teal-600">Calculado pela soma dos produtos — edite os valores acima</p>}
             </div>
 
             {/* Responsável — com sugestões */}
