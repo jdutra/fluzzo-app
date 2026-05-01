@@ -567,6 +567,12 @@ export type Database = {
         Update: Partial<Omit<ClientContact, 'id' | 'created_at'>>
         Relationships: []
       }
+      company_contacts: {
+        Row: CompanyContact
+        Insert: Omit<CompanyContact, 'id' | 'created_at'>
+        Update: Partial<Omit<CompanyContact, 'id' | 'created_at'>>
+        Relationships: []
+      }
     }
     Views: {
       vw_cash_forecast: {

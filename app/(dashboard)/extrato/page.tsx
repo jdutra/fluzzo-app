@@ -391,9 +391,7 @@ export default function ExtratoPage() {
         action={
           step === 'list'
             ? { label: 'Importar CSV', onClick: () => setStep('upload') }
-            : step !== 'list'
-            ? { label: '← Voltar ao extrato', onClick: resetImport }
-            : undefined
+            : { label: '← Voltar ao extrato', onClick: resetImport }
         }
       />
 
