@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/use-toast'
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
@@ -19,8 +18,8 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { ChevronLeft, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Plus, Trash2, Loader2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
-  ResponsiveContainer, BarChart, Bar, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+  ResponsiveContainer, Legend,
 } from 'recharts'
 import type { CashForecastManual } from '@/lib/supabase/types'
 import { useForm } from 'react-hook-form'
@@ -29,9 +28,6 @@ import { z } from 'zod'
 
 const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
   'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-
-const MONTH_NAMES_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
 const manualSchema = z.object({
   period: z.string().min(1, 'Período obrigatório'),
@@ -42,6 +38,7 @@ const manualSchema = z.object({
 })
 
 type ManualFormData = z.infer<typeof manualSchema>
+type ViewMode = 'previsto' | 'realizado'
 
 export default function FluxoPage() {
   const supabase = createClient()
@@ -49,6 +46,7 @@ export default function FluxoPage() {
   const now = new Date()
 
   const [year, setYear] = useState(now.getFullYear())
+  const [view, setView] = useState<ViewMode>('previsto')
   const [manualSheetOpen, setManualSheetOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<CashForecastManual | null>(null)
 
@@ -60,27 +58,48 @@ export default function FluxoPage() {
   const { data: company } = useQuery({
     queryKey: ['company'],
     queryFn: async () => {
-      const { data } = await supabase.from('companies').select('id').single()
+      const { data } = await supabase.from('companies').select('id, saldo_inicial, data_saldo_inicial').single()
       return data
     },
   })
 
-  // Entries agrupadas por mês (receitas)
-  const { data: entryData = [] } = useQuery({
-    queryKey: ['entries-year', year],
+  const { data: classifications = [] } = useQuery({
+    queryKey: ['classifications'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('entries')
-        .select('forecast_payment, amount, status, classification')
-        .gte('forecast_payment', `${year}-01-01`)
-        .lte('forecast_payment', `${year}-12-31`)
-        .neq('status', 'cancelado')
-      if (error) throw error
+      const { data } = await supabase.from('classifications').select('name, type').eq('active', true)
       return data ?? []
     },
   })
 
-  // Lançamentos manuais (saídas / outros)
+  const { data: entryData = [] } = useQuery({
+    queryKey: ['entries-year', year, view],
+    queryFn: async () => {
+      let q = supabase.from('entries').select('forecast_payment, paid_at, amount, status, classification')
+
+      if (view === 'previsto') {
+        q = (q as any)
+          .gte('forecast_payment', `${year}-01-01`)
+          .lte('forecast_payment', `${year}-12-31`)
+          .neq('status', 'cancelado')
+      } else {
+        q = (q as any)
+          .eq('status', 'pago')
+          .gte('paid_at', `${year}-01-01`)
+          .lte('paid_at', `${year}-12-31`)
+      }
+
+      const { data, error } = await q
+      if (error) throw error
+      return (data ?? []) as Array<{
+        forecast_payment: string | null
+        paid_at: string | null
+        amount: number
+        status: string
+        classification: string
+      }>
+    },
+  })
+
   const { data: manualData = [] } = useQuery<CashForecastManual[]>({
     queryKey: ['cash-manual', year],
     queryFn: async () => {
@@ -95,45 +114,16 @@ export default function FluxoPage() {
     },
   })
 
-  // Build monthly data for chart
-  const monthlyData = useMemo(() => {
-    return Array.from({ length: 12 }, (_, i) => {
-      const m = i + 1
-      const periodStr = `${year}-${String(m).padStart(2, '0')}`
+  const MONTHS_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+  const monthPeriods = useMemo(
+    () => Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`),
+    [year]
+  )
 
-      // Entries (receitas) neste mês
-      const monthEntries = entryData.filter((e) => {
-        const p = e.forecast_payment?.slice(0, 7)
-        return p === periodStr
-      })
-      const receita = monthEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0)
-      const recebido = monthEntries.filter(e => e.status === 'pago').reduce((sum, e) => sum + (e.amount ?? 0), 0)
-
-      // Manual entries neste mês
-      const monthManual = manualData.filter((m2) => m2.period === periodStr)
-      const saida = monthManual.filter(m2 => m2.type === 'saida').reduce((sum, m2) => sum + m2.amount, 0)
-      const entradas_manual = monthManual.filter(m2 => m2.type === 'entrada').reduce((sum, m2) => sum + m2.amount, 0)
-
-      const total_in = receita + entradas_manual
-      const total_out = saida
-      const saldo = total_in - total_out
-
-      return {
-        month: MONTH_NAMES[i],
-        period: periodStr,
-        receita,
-        recebido,
-        saida,
-        entradas_manual,
-        total_in,
-        total_out,
-        saldo,
-      }
-    })
-  }, [entryData, manualData, year])
-
-  // ── Spreadsheet colapsável ───────────────────────────────────
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['receitas']))
+  // ── Spreadsheet state ──────────────────────────────────────────
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
+    new Set(['entrada-op', 'saida-op', 'entrada-manual', 'saida-manual'])
+  )
 
   function toggleGroup(id: string) {
     setExpandedGroups((prev) => {
@@ -144,27 +134,45 @@ export default function FluxoPage() {
     })
   }
 
-  const MONTHS_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-  const monthPeriods = Array.from({ length: 12 }, (_, i) =>
-    `${year}-${String(i + 1).padStart(2, '0')}`
-  )
-
+  // ── Computed spreadsheet data ──────────────────────────────────
   const spreadsheet = useMemo(() => {
-    // Receitas: entries agrupadas por classification
-    const byClass: Record<string, Record<string, number>> = {}
-    for (const e of entryData) {
-      const period = e.forecast_payment?.slice(0, 7)
-      if (!period) continue
-      const cls = (e as any).classification || 'Receita'
-      if (!byClass[cls]) byClass[cls] = {}
-      byClass[cls][period] = (byClass[cls][period] || 0) + (e.amount ?? 0)
+    // Build classification type lookup
+    const classTypeMap: Record<string, 'entrada' | 'saida' | 'ambos'> = {}
+    for (const c of classifications) {
+      classTypeMap[(c as any).name] = (c as any).type
     }
 
-    // Manual: separado por tipo e category
+    // Date field to use for grouping
+    const dateField = view === 'previsto' ? 'forecast_payment' : 'paid_at'
+
+    // Entries split by classification type
+    const byClassEntrada: Record<string, Record<string, number>> = {}
+    const byClassSaida: Record<string, Record<string, number>> = {}
+
+    for (const e of entryData) {
+      const period = (e as any)[dateField]?.slice(0, 7)
+      if (!period) continue
+      const cls = e.classification || 'Receita'
+      const clsType = classTypeMap[cls] ?? 'entrada'
+
+      if (clsType === 'saida') {
+        if (!byClassSaida[cls]) byClassSaida[cls] = {}
+        byClassSaida[cls][period] = (byClassSaida[cls][period] || 0) + (e.amount ?? 0)
+      } else {
+        if (!byClassEntrada[cls]) byClassEntrada[cls] = {}
+        byClassEntrada[cls][period] = (byClassEntrada[cls][period] || 0) + (e.amount ?? 0)
+      }
+    }
+
+    // Manual entries split by type
     const byEntrada: Record<string, Record<string, number>> = {}
     const bySaida: Record<string, Record<string, number>> = {}
+
+    // For realizado, only include manual entries from past periods
+    const today = new Date().toISOString().slice(0, 7)
     for (const m of manualData) {
       const period = m.period
+      if (view === 'realizado' && period > today) continue
       const cat = m.category || 'Outros'
       if (m.type === 'entrada') {
         if (!byEntrada[cat]) byEntrada[cat] = {}
@@ -175,34 +183,69 @@ export default function FluxoPage() {
       }
     }
 
-    // Totais por mês
-    const totalEntradaByMonth: Record<string, number> = {}
-    const totalSaidaByMonth: Record<string, number> = {}
+    // Monthly totals
+    const totalEntradaOpByMonth: Record<string, number> = {}
+    const totalSaidaOpByMonth: Record<string, number> = {}
+    const totalEntradaNaoOpByMonth: Record<string, number> = {}
+    const totalSaidaNaoOpByMonth: Record<string, number> = {}
+    const geracaoOpByMonth: Record<string, number> = {}
+    const geracaoNaoOpByMonth: Record<string, number> = {}
+    const geracaoLiquidaByMonth: Record<string, number> = {}
+    const margemLiquidaByMonth: Record<string, number> = {}
+
     for (const p of monthPeriods) {
-      const recSum = Object.values(byClass).reduce((s, v) => s + (v[p] ?? 0), 0)
-      const entSum = Object.values(byEntrada).reduce((s, v) => s + (v[p] ?? 0), 0)
-      const saiSum = Object.values(bySaida).reduce((s, v) => s + (v[p] ?? 0), 0)
-      totalEntradaByMonth[p] = recSum + entSum
-      totalSaidaByMonth[p] = saiSum
+      totalEntradaOpByMonth[p] = Object.values(byClassEntrada).reduce((s, v) => s + (v[p] ?? 0), 0)
+      totalSaidaOpByMonth[p] = Object.values(byClassSaida).reduce((s, v) => s + (v[p] ?? 0), 0)
+      totalEntradaNaoOpByMonth[p] = Object.values(byEntrada).reduce((s, v) => s + (v[p] ?? 0), 0)
+      totalSaidaNaoOpByMonth[p] = Object.values(bySaida).reduce((s, v) => s + (v[p] ?? 0), 0)
+      geracaoOpByMonth[p] = totalEntradaOpByMonth[p] - totalSaidaOpByMonth[p]
+      geracaoNaoOpByMonth[p] = totalEntradaNaoOpByMonth[p] - totalSaidaNaoOpByMonth[p]
+      geracaoLiquidaByMonth[p] = geracaoOpByMonth[p] + geracaoNaoOpByMonth[p]
+      margemLiquidaByMonth[p] = totalEntradaOpByMonth[p] > 0
+        ? (geracaoLiquidaByMonth[p] / totalEntradaOpByMonth[p]) * 100
+        : 0
     }
 
-    // Saldo acumulado
-    let acc = 0
+    // Saldo acumulado starting from company.saldo_inicial
+    let acc = ((company as any)?.saldo_inicial ?? 0) as number
     const saldoAcumulado: Record<string, number> = {}
-    const saldoMensal: Record<string, number> = {}
     const saldoInicial: Record<string, number> = {}
+
     for (const p of monthPeriods) {
       saldoInicial[p] = acc
-      const s = totalEntradaByMonth[p] - totalSaidaByMonth[p]
-      saldoMensal[p] = s
-      acc += s
+      acc += geracaoLiquidaByMonth[p]
       saldoAcumulado[p] = acc
     }
 
-    return { byClass, byEntrada, bySaida, totalEntradaByMonth, totalSaidaByMonth, saldoMensal, saldoAcumulado, saldoInicial }
-  }, [entryData, manualData, year, monthPeriods])
+    return {
+      byClassEntrada, byClassSaida, byEntrada, bySaida,
+      totalEntradaOpByMonth, totalSaidaOpByMonth,
+      totalEntradaNaoOpByMonth, totalSaidaNaoOpByMonth,
+      geracaoOpByMonth, geracaoNaoOpByMonth,
+      geracaoLiquidaByMonth, margemLiquidaByMonth,
+      saldoAcumulado, saldoInicial,
+    }
+  }, [entryData, manualData, monthPeriods, classifications, company, view])
 
-  // Formata valor compacto para a tabela
+  // ── Chart data ─────────────────────────────────────────────────
+  const monthlyData = useMemo(() => {
+    return Array.from({ length: 12 }, (_, i) => {
+      const p = monthPeriods[i]
+      return {
+        month: MONTH_NAMES[i],
+        entradaOp: spreadsheet.totalEntradaOpByMonth[p] ?? 0,
+        saidaOp: spreadsheet.totalSaidaOpByMonth[p] ?? 0,
+        geracaoLiquida: spreadsheet.geracaoLiquidaByMonth[p] ?? 0,
+      }
+    })
+  }, [spreadsheet, monthPeriods])
+
+  // ── KPI totals ─────────────────────────────────────────────────
+  const totalEntradaOp = monthlyData.reduce((s, m) => s + m.entradaOp, 0)
+  const totalSaidaOp = monthlyData.reduce((s, m) => s + m.saidaOp, 0)
+  const saldoFinal = spreadsheet.saldoAcumulado[monthPeriods[11]] ?? 0
+
+  // ── Formatter ──────────────────────────────────────────────────
   function fmtCell(v: number): string {
     if (v === 0) return '—'
     const abs = Math.abs(v)
@@ -212,14 +255,16 @@ export default function FluxoPage() {
     return v < 0 ? `- ${fmt}` : fmt
   }
 
-  const totalReceita = monthlyData.reduce((s, m) => s + m.receita, 0)
-  const totalRecebido = monthlyData.reduce((s, m) => s + m.recebido, 0)
-  const totalSaida = monthlyData.reduce((s, m) => s + m.saida, 0)
+  function fmtPct(v: number): string {
+    if (v === 0) return '—'
+    return `${v.toFixed(1)}%`
+  }
 
+  // ── Mutations ──────────────────────────────────────────────────
   const manualMutation = useMutation({
     mutationFn: async (data: ManualFormData) => {
-      const { error } = await supabase.from('cash_forecast_manual').insert({
-        company_id: company?.id ?? null,
+      const { error } = await (supabase as any).from('cash_forecast_manual').insert({
+        company_id: (company as any)?.id ?? null,
         period: data.period,
         category: data.category,
         description: data.description || null,
@@ -259,10 +304,38 @@ export default function FluxoPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <PageHeader title="Fluxo de Caixa" description="Projeção mensal de receitas e saídas" />
-        <Button size="sm" onClick={openManualSheet} className="bg-teal-600 hover:bg-teal-700 gap-2">
-          <Plus size={14} /> Lançamento manual
-        </Button>
+        <PageHeader
+          title="Fluxo de Caixa"
+          description={view === 'previsto' ? 'Projeção mensal com todos os lançamentos previstos' : 'Apenas lançamentos efetivamente pagos'}
+        />
+        <div className="flex items-center gap-2">
+          {/* Previsto / Realizado toggle */}
+          <div className="flex rounded-md border border-slate-200 overflow-hidden">
+            <button
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                view === 'previsto'
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+              onClick={() => setView('previsto')}
+            >
+              Previsto
+            </button>
+            <button
+              className={`px-3 py-1.5 text-sm font-medium transition-colors border-l border-slate-200 ${
+                view === 'realizado'
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+              onClick={() => setView('realizado')}
+            >
+              Realizado
+            </button>
+          </div>
+          <Button size="sm" onClick={openManualSheet} className="bg-teal-600 hover:bg-teal-700 gap-2">
+            <Plus size={14} /> Lançamento manual
+          </Button>
+        </div>
       </div>
 
       {/* Year navigator */}
@@ -282,27 +355,33 @@ export default function FluxoPage() {
           <CardContent className="pt-5">
             <div className="flex items-center gap-2 mb-1">
               <TrendingUp size={16} className="text-green-500" />
-              <p className="text-sm text-slate-500">Receita prevista</p>
+              <p className="text-sm text-slate-500">
+                {view === 'previsto' ? 'Entradas operacionais' : 'Total recebido'}
+              </p>
             </div>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalReceita)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingUp size={16} className="text-teal-500" />
-              <p className="text-sm text-slate-500">Efetivamente pago</p>
-            </div>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalRecebido)}</p>
+            <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalEntradaOp)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-5">
             <div className="flex items-center gap-2 mb-1">
               <TrendingDown size={16} className="text-red-500" />
-              <p className="text-sm text-slate-500">Saídas manuais</p>
+              <p className="text-sm text-slate-500">
+                {view === 'previsto' ? 'Saídas operacionais' : 'Total saído'}
+              </p>
             </div>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalSaida)}</p>
+            <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalSaidaOp)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingUp size={16} className={saldoFinal >= 0 ? 'text-teal-500' : 'text-red-500'} />
+              <p className="text-sm text-slate-500">Saldo final {year}</p>
+            </div>
+            <p className={`text-2xl font-bold ${saldoFinal >= 0 ? 'text-slate-800' : 'text-red-600'}`}>
+              {formatCurrency(saldoFinal)}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -310,7 +389,12 @@ export default function FluxoPage() {
       {/* Chart */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Fluxo mensal — {year}</CardTitle>
+          <CardTitle className="text-base">
+            Fluxo mensal — {year}
+            <span className="ml-2 text-xs font-normal text-slate-400">
+              ({view === 'previsto' ? 'previsto' : 'realizado'})
+            </span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={280}>
@@ -324,16 +408,16 @@ export default function FluxoPage() {
               <RechartsTooltip
                 formatter={(value: number, name: string) => [
                   formatCurrency(value),
-                  name === 'receita' ? 'Receita prevista' : name === 'recebido' ? 'Recebido' : 'Saídas',
+                  name === 'entradaOp' ? 'Entradas Op.' : name === 'saidaOp' ? 'Saídas Op.' : 'Geração Líquida',
                 ]}
                 contentStyle={{ fontSize: 12, borderRadius: 8 }}
               />
               <Legend formatter={(val) =>
-                val === 'receita' ? 'Receita prevista' : val === 'recebido' ? 'Recebido' : 'Saídas'
+                val === 'entradaOp' ? 'Entradas Op.' : val === 'saidaOp' ? 'Saídas Op.' : 'Geração Líquida'
               } />
-              <Bar dataKey="receita" fill="#bae6fd" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="recebido" fill="#0284c7" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="saida" fill="#fca5a5" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="entradaOp" fill="#bae6fd" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="saidaOp" fill="#fca5a5" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="geracaoLiquida" fill="#0284c7" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -342,12 +426,16 @@ export default function FluxoPage() {
       {/* ── Spreadsheet colapsável ── */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Fluxo detalhado — {year}</CardTitle>
+          <CardTitle className="text-base">
+            Fluxo detalhado — {year}
+            <span className="ml-2 text-xs font-normal text-slate-400">
+              ({view === 'previsto' ? 'previsto' : 'realizado'})
+            </span>
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="text-xs border-collapse w-full" style={{ minWidth: 900 }}>
-              {/* Cabeçalho: meses como colunas */}
               <thead>
                 <tr className="bg-slate-100 border-b-2 border-slate-300 text-slate-600">
                   <th className="sticky left-0 z-10 bg-slate-100 text-left px-3 py-2.5 font-semibold w-52 min-w-[200px] uppercase tracking-wide text-[10px]">
@@ -373,18 +461,16 @@ export default function FluxoPage() {
                   fmt={fmtCell}
                 />
 
-                {/* ══ GRUPO: Receitas de Projetos ══ */}
+                {/* ══ GRUPO: Entradas Operacionais ══ */}
                 <SpreadGroupHeader
-                  label="Receitas de Projetos"
-                  expanded={expandedGroups.has('receitas')}
-                  onToggle={() => toggleGroup('receitas')}
-                  values={monthPeriods.map(p =>
-                    Object.values(spreadsheet.byClass).reduce((s, v) => s + (v[p] ?? 0), 0)
-                  )}
+                  label="Entradas Operacionais"
+                  expanded={expandedGroups.has('entrada-op')}
+                  onToggle={() => toggleGroup('entrada-op')}
+                  values={monthPeriods.map(p => spreadsheet.totalEntradaOpByMonth[p])}
                   color="green"
                   fmt={fmtCell}
                 />
-                {expandedGroups.has('receitas') && Object.entries(spreadsheet.byClass).map(([cls, byMonth]) => (
+                {expandedGroups.has('entrada-op') && Object.entries(spreadsheet.byClassEntrada).map(([cls, byMonth]) => (
                   <SpreadRow
                     key={cls}
                     label={cls}
@@ -393,18 +479,46 @@ export default function FluxoPage() {
                     fmt={fmtCell}
                   />
                 ))}
-                {expandedGroups.has('receitas') && Object.keys(spreadsheet.byClass).length === 0 && (
+                {expandedGroups.has('entrada-op') && Object.keys(spreadsheet.byClassEntrada).length === 0 && (
                   <SpreadRow label="(sem lançamentos)" values={monthPeriods.map(() => 0)} variant="detail" fmt={fmtCell} empty />
                 )}
+
+                {/* ══ GRUPO: Saídas Operacionais ══ */}
+                <SpreadGroupHeader
+                  label="Saídas Operacionais"
+                  expanded={expandedGroups.has('saida-op')}
+                  onToggle={() => toggleGroup('saida-op')}
+                  values={monthPeriods.map(p => spreadsheet.totalSaidaOpByMonth[p])}
+                  color="red"
+                  fmt={fmtCell}
+                />
+                {expandedGroups.has('saida-op') && Object.entries(spreadsheet.byClassSaida).map(([cls, byMonth]) => (
+                  <SpreadRow
+                    key={cls}
+                    label={cls}
+                    values={monthPeriods.map(p => byMonth[p] ?? 0)}
+                    variant="detail"
+                    fmt={fmtCell}
+                  />
+                ))}
+                {expandedGroups.has('saida-op') && Object.keys(spreadsheet.byClassSaida).length === 0 && (
+                  <SpreadRow label="(sem lançamentos)" values={monthPeriods.map(() => 0)} variant="detail" fmt={fmtCell} empty />
+                )}
+
+                {/* ── Geração Operacional ── */}
+                <SpreadRow
+                  label="Geração Operacional"
+                  values={monthPeriods.map(p => spreadsheet.geracaoOpByMonth[p])}
+                  variant="saldo"
+                  fmt={fmtCell}
+                />
 
                 {/* ══ GRUPO: Entradas Não Operacionais ══ */}
                 <SpreadGroupHeader
                   label="Entradas Não Operacionais"
                   expanded={expandedGroups.has('entrada-manual')}
                   onToggle={() => toggleGroup('entrada-manual')}
-                  values={monthPeriods.map(p =>
-                    Object.values(spreadsheet.byEntrada).reduce((s, v) => s + (v[p] ?? 0), 0)
-                  )}
+                  values={monthPeriods.map(p => spreadsheet.totalEntradaNaoOpByMonth[p])}
                   color="teal"
                   fmt={fmtCell}
                 />
@@ -421,26 +535,16 @@ export default function FluxoPage() {
                   <SpreadRow label="(sem lançamentos)" values={monthPeriods.map(() => 0)} variant="detail" fmt={fmtCell} empty />
                 )}
 
-                {/* ── Total Entradas ── */}
-                <SpreadRow
-                  label="Total Entradas"
-                  values={monthPeriods.map(p => spreadsheet.totalEntradaByMonth[p])}
-                  variant="total-green"
-                  fmt={fmtCell}
-                />
-
-                {/* ══ GRUPO: Saídas ══ */}
+                {/* ══ GRUPO: Saídas Não Operacionais ══ */}
                 <SpreadGroupHeader
-                  label="Saídas"
-                  expanded={expandedGroups.has('saidas')}
-                  onToggle={() => toggleGroup('saidas')}
-                  values={monthPeriods.map(p =>
-                    Object.values(spreadsheet.bySaida).reduce((s, v) => s + (v[p] ?? 0), 0)
-                  )}
-                  color="red"
+                  label="Saídas Não Operacionais"
+                  expanded={expandedGroups.has('saida-manual')}
+                  onToggle={() => toggleGroup('saida-manual')}
+                  values={monthPeriods.map(p => spreadsheet.totalSaidaNaoOpByMonth[p])}
+                  color="orange"
                   fmt={fmtCell}
                 />
-                {expandedGroups.has('saidas') && Object.entries(spreadsheet.bySaida).map(([cat, byMonth]) => (
+                {expandedGroups.has('saida-manual') && Object.entries(spreadsheet.bySaida).map(([cat, byMonth]) => (
                   <SpreadRow
                     key={cat}
                     label={cat}
@@ -449,31 +553,44 @@ export default function FluxoPage() {
                     fmt={fmtCell}
                   />
                 ))}
-                {expandedGroups.has('saidas') && Object.keys(spreadsheet.bySaida).length === 0 && (
+                {expandedGroups.has('saida-manual') && Object.keys(spreadsheet.bySaida).length === 0 && (
                   <SpreadRow label="(sem lançamentos)" values={monthPeriods.map(() => 0)} variant="detail" fmt={fmtCell} empty />
                 )}
 
-                {/* ── Total Saídas ── */}
+                {/* ── Geração Não Operacional ── */}
                 <SpreadRow
-                  label="Total Saídas"
-                  values={monthPeriods.map(p => spreadsheet.totalSaidaByMonth[p])}
-                  variant="total-red"
-                  fmt={fmtCell}
-                />
-
-                {/* ── Saldo Mensal ── */}
-                <SpreadRow
-                  label="Geração Líquida de Caixa"
-                  values={monthPeriods.map(p => spreadsheet.saldoMensal[p])}
+                  label="Geração Não Operacional"
+                  values={monthPeriods.map(p => spreadsheet.geracaoNaoOpByMonth[p])}
                   variant="saldo"
                   fmt={fmtCell}
                 />
 
-                {/* ── Saldo Acumulado ── */}
+                {/* ── Geração Líquida ── */}
+                <SpreadRow
+                  label="Geração Líquida"
+                  values={monthPeriods.map(p => spreadsheet.geracaoLiquidaByMonth[p])}
+                  variant="saldo-dark"
+                  fmt={fmtCell}
+                />
+
+                {/* ── Margem Líquida ── */}
+                <SpreadRow
+                  label="Margem Líquida"
+                  values={monthPeriods.map(p => spreadsheet.margemLiquidaByMonth[p])}
+                  variant="highlight"
+                  fmt={fmtPct}
+                  totalFmt={(vals) => {
+                    const totalGL = monthPeriods.reduce((s, p) => s + (spreadsheet.geracaoLiquidaByMonth[p] ?? 0), 0)
+                    const totalEO = monthPeriods.reduce((s, p) => s + (spreadsheet.totalEntradaOpByMonth[p] ?? 0), 0)
+                    return totalEO > 0 ? fmtPct((totalGL / totalEO) * 100) : '—'
+                  }}
+                />
+
+                {/* ── Saldo Final ── */}
                 <SpreadRow
                   label="Saldo Final Acumulado"
                   values={monthPeriods.map(p => spreadsheet.saldoAcumulado[p])}
-                  variant="highlight-blue"
+                  variant="highlight-blue-bold"
                   fmt={fmtCell}
                 />
 
@@ -599,7 +716,7 @@ export default function FluxoPage() {
 
 // ─── Componentes auxiliares do Spreadsheet ─────────────────────────────────
 
-type SpreadVariant = 'detail' | 'total-green' | 'total-red' | 'saldo' | 'highlight-blue'
+type SpreadVariant = 'detail' | 'saldo' | 'saldo-dark' | 'highlight' | 'highlight-blue' | 'highlight-blue-bold'
 
 function SpreadGroupHeader({
   label, expanded, onToggle, values, color, fmt,
@@ -608,7 +725,7 @@ function SpreadGroupHeader({
   expanded: boolean
   onToggle: () => void
   values: number[]
-  color: 'green' | 'teal' | 'red'
+  color: 'green' | 'teal' | 'red' | 'orange'
   fmt: (v: number) => string
 }) {
   const styles = {
@@ -629,6 +746,12 @@ function SpreadGroupHeader({
       sticky: 'sticky left-0 z-10 bg-rose-50 px-3 py-2 font-semibold text-rose-800',
       cell: 'text-rose-700 font-semibold',
       total: 'bg-rose-100 text-rose-800 font-bold',
+    },
+    orange: {
+      row: 'bg-orange-50 border-y border-orange-200 cursor-pointer select-none hover:bg-orange-100 transition-colors',
+      sticky: 'sticky left-0 z-10 bg-orange-50 px-3 py-2 font-semibold text-orange-800',
+      cell: 'text-orange-700 font-semibold',
+      total: 'bg-orange-100 text-orange-800 font-bold',
     },
   }
   const s = styles[color]
@@ -657,13 +780,14 @@ function SpreadGroupHeader({
 }
 
 function SpreadRow({
-  label, values, variant, fmt, empty = false,
+  label, values, variant, fmt, empty = false, totalFmt,
 }: {
   label: string
   values: number[]
   variant: SpreadVariant
   fmt: (v: number) => string
   empty?: boolean
+  totalFmt?: (values: number[]) => string
 }) {
   const total = values.reduce((s, v) => s + v, 0)
 
@@ -674,29 +798,35 @@ function SpreadRow({
       first: 'sticky left-0 z-10 bg-white pl-7 pr-3 py-1.5 text-slate-500 font-normal',
       totalCell: 'bg-slate-50 font-medium text-slate-600',
     },
-    'total-green': {
-      row: 'bg-emerald-50/80 border-t border-emerald-200',
-      cell: (v) => v >= 0 ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-semibold',
-      first: 'sticky left-0 z-10 bg-emerald-50 px-3 py-2 text-emerald-800 font-bold',
-      totalCell: 'bg-emerald-100/80 font-bold text-emerald-800',
-    },
-    'total-red': {
-      row: 'bg-rose-50/80 border-t border-rose-200',
-      cell: () => 'text-rose-700 font-semibold',
-      first: 'sticky left-0 z-10 bg-rose-50 px-3 py-2 text-rose-800 font-bold',
-      totalCell: 'bg-rose-100/80 font-bold text-rose-800',
-    },
     saldo: {
-      row: 'bg-slate-800/90 border-y border-slate-600',
+      row: 'bg-slate-700/90 border-y border-slate-500',
       cell: (v) => v >= 0 ? 'text-emerald-300 font-bold' : 'text-rose-300 font-bold',
-      first: 'sticky left-0 z-10 bg-slate-800 px-3 py-2.5 text-slate-100 font-bold',
-      totalCell: 'bg-slate-900/50 font-bold text-slate-100',
+      first: 'sticky left-0 z-10 bg-slate-700 px-3 py-2.5 text-slate-100 font-bold',
+      totalCell: 'bg-slate-800/50 font-bold text-slate-100',
+    },
+    'saldo-dark': {
+      row: 'bg-slate-900 border-y border-slate-700',
+      cell: (v) => v >= 0 ? 'text-emerald-300 font-bold' : 'text-rose-300 font-bold',
+      first: 'sticky left-0 z-10 bg-slate-900 px-3 py-2.5 text-white font-bold',
+      totalCell: 'bg-slate-900 font-bold text-white',
+    },
+    highlight: {
+      row: 'bg-amber-50/80 border-b border-amber-200',
+      cell: (v) => v >= 0 ? 'text-amber-700 font-semibold' : 'text-rose-600 font-semibold',
+      first: 'sticky left-0 z-10 bg-amber-50 px-3 py-2.5 text-amber-800 font-bold',
+      totalCell: 'bg-amber-100/80 font-bold text-amber-800',
     },
     'highlight-blue': {
       row: 'bg-slate-50 border-b border-slate-200',
       cell: (v) => v >= 0 ? 'text-slate-700 font-semibold' : 'text-rose-600 font-semibold',
       first: 'sticky left-0 z-10 bg-slate-50 px-3 py-2.5 text-slate-700 font-bold',
       totalCell: 'bg-slate-100 font-bold text-slate-700',
+    },
+    'highlight-blue-bold': {
+      row: 'bg-sky-50 border-b-2 border-sky-300',
+      cell: (v) => v >= 0 ? 'text-sky-700 font-bold' : 'text-rose-600 font-bold',
+      first: 'sticky left-0 z-10 bg-sky-50 px-3 py-2.5 text-sky-800 font-extrabold',
+      totalCell: 'bg-sky-100 font-extrabold text-sky-800',
     },
   }
 
@@ -711,7 +841,7 @@ function SpreadRow({
         </td>
       ))}
       <td className={`px-2 py-1.5 text-right ${s.totalCell}`}>
-        {empty ? '—' : fmt(total)}
+        {empty ? '—' : totalFmt ? totalFmt(values) : fmt(total)}
       </td>
     </tr>
   )
