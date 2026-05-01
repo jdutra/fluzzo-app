@@ -16,8 +16,9 @@ import {
 } from '@/components/ui/select'
 import { toast } from '@/components/ui/use-toast'
 import {
-  Receipt, Check, Pencil, X, ChevronLeft, ChevronRight,
+  Receipt, Check, Pencil, X, ChevronLeft, ChevronRight, Undo2,
 } from 'lucide-react'
+import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import {
   formatCurrency, formatDate,
   ENTRY_STATUS_LABELS, ENTRY_STATUS_COLORS,
@@ -43,6 +44,16 @@ const STATUS_NEXT_LABEL: Partial<Record<EntryStatus, string>> = {
   faturado: 'Pagar',
 }
 
+const STATUS_PREV: Partial<Record<EntryStatus, EntryStatus>> = {
+  faturado: 'previsto',
+  pago: 'faturado',
+}
+
+const STATUS_PREV_LABEL: Partial<Record<EntryStatus, string>> = {
+  faturado: 'Reverter para Previsto',
+  pago: 'Reverter para Faturado',
+}
+
 export default function LancamentosPage() {
   const supabase = createClient()
   const queryClient = useQueryClient()
@@ -58,6 +69,10 @@ export default function LancamentosPage() {
 
   // Classification editing
   const [editingClassId, setEditingClassId] = useState<string | null>(null)
+
+  // Revert status
+  const [revertTarget, setRevertTarget] = useState<EntryWithRelations | null>(null)
+  const [revertToStatus, setRevertToStatus] = useState<EntryStatus | null>(null)
 
   const period = `${year}-${String(month).padStart(2, '0')}`
 
@@ -133,6 +148,19 @@ export default function LancamentosPage() {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       toast({ title: 'Classificação atualizada.' })
       setEditingClassId(null)
+    },
+    onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
+  })
+
+  const revertMutation = useMutation({
+    mutationFn: async ({ entry, toStatus }: { entry: Entry; toStatus: EntryStatus }) => {
+      await updateEntryStatus(entry.id, toStatus, entry.status)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
+      toast({ title: 'Status revertido.' })
+      setRevertTarget(null)
+      setRevertToStatus(null)
     },
     onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
   })
@@ -273,6 +301,7 @@ export default function LancamentosPage() {
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Classificação</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Parcela</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Valor</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden lg:table-cell">Prev. faturamento</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Prev. pagamento</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Status</th>
                   <th className="px-4 py-3" />
@@ -397,6 +426,11 @@ export default function LancamentosPage() {
                         )}
                       </td>
 
+                      {/* Prev. faturamento */}
+                      <td className="px-4 py-3 text-slate-500 text-xs hidden lg:table-cell">
+                        {entry.forecast_billing ? formatDate(entry.forecast_billing) : '—'}
+                      </td>
+
                       {/* Prev. pagamento */}
                       <td className="px-4 py-3 text-slate-500 text-xs">
                         {entry.forecast_payment ? formatDate(entry.forecast_payment) : '—'}
@@ -411,18 +445,34 @@ export default function LancamentosPage() {
 
                       {/* Ação */}
                       <td className="px-4 py-3">
-                        {nextStatus && nextLabel && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs gap-1 text-slate-500 hover:text-teal-700 hover:bg-teal-50"
-                            onClick={() => statusMutation.mutate({ entry, newStatus: nextStatus })}
-                            disabled={statusMutation.isPending}
-                          >
-                            <Check size={11} />
-                            {nextLabel}
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {nextStatus && nextLabel && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs gap-1 text-slate-500 hover:text-teal-700 hover:bg-teal-50"
+                              onClick={() => statusMutation.mutate({ entry, newStatus: nextStatus })}
+                              disabled={statusMutation.isPending}
+                            >
+                              <Check size={11} />
+                              {nextLabel}
+                            </Button>
+                          )}
+                          {STATUS_PREV[entry.status] && STATUS_PREV_LABEL[entry.status] && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs gap-1 text-slate-400 hover:text-orange-600 hover:bg-orange-50"
+                              onClick={() => {
+                                setRevertTarget(entry)
+                                setRevertToStatus(STATUS_PREV[entry.status] ?? null)
+                              }}
+                              title={STATUS_PREV_LABEL[entry.status]}
+                            >
+                              <Undo2 size={11} />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -433,6 +483,17 @@ export default function LancamentosPage() {
         )}
       </div>
 
+      <ConfirmDialog
+        open={!!revertTarget}
+        onOpenChange={(v) => { if (!v) { setRevertTarget(null); setRevertToStatus(null) } }}
+        title="Reverter status"
+        description={`Deseja reverter este lançamento para "${ENTRY_STATUS_LABELS[revertToStatus ?? 'previsto']}"?`}
+        confirmLabel="Reverter"
+        cancelLabel="Cancelar"
+        variant="default"
+        loading={revertMutation.isPending}
+        onConfirm={() => revertTarget && revertToStatus && revertMutation.mutate({ entry: revertTarget, toStatus: revertToStatus })}
+      />
     </div>
   )
 }

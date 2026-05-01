@@ -183,9 +183,20 @@ export default function ClientesPage() {
       {isLoading ? (
         <TableSkeleton />
       ) : filtered.length === 0 ? (
-        <EmptyState icon={Users} title={search ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado'}
-          description={search ? 'Tente outro termo.' : 'Clique em "Novo Cliente" para começar.'}
-          action={!search ? { label: 'Novo Cliente', onClick: openNew } : undefined} />
+        <EmptyState
+          icon={Users}
+          title={clients.length === 0 ? 'Nenhum cliente cadastrado' : 'Nenhum cliente encontrado'}
+          description={
+            clients.length === 0
+              ? 'Clique em "Novo Cliente" para começar.'
+              : 'Nenhum cliente corresponde aos filtros selecionados.'
+          }
+          action={
+            clients.length === 0
+              ? { label: 'Novo Cliente', onClick: openNew }
+              : { label: 'Limpar filtros', onClick: () => { setSearch(''); setTypeFilter('all'); setStatusFilter('all'); setCrmFilter('all') } }
+          }
+        />
       ) : (
         <div className="bg-white rounded-lg border overflow-hidden">
           <table className="w-full text-sm">
