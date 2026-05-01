@@ -94,15 +94,15 @@ export async function updateProject(
 }
 
 /**
- * Vincula consultor a um projeto.
+ * Vincula consultor a um projeto e gera lançamentos automáticos de pagamento.
  */
 export async function addProjectConsultant(params: {
   project_id: string
   consultant_id: string
   role: string | null
-  fee_pct: number
   installments: number
   monthly_value: number
+  company_id: string | null
 }) {
   const supabase = createClient()
   const amount_due = params.monthly_value * params.installments
@@ -111,7 +111,7 @@ export async function addProjectConsultant(params: {
     project_id: params.project_id,
     consultant_id: params.consultant_id,
     role: params.role,
-    fee_pct: params.fee_pct,
+    fee_pct: 0,
     amount_due,
     amount_paid: 0,
     installments: params.installments,
@@ -119,17 +119,40 @@ export async function addProjectConsultant(params: {
   })
 
   if (error) throw error
+
+  // Auto-gerar lançamentos de débito para o consultor
+  if (amount_due > 0 && params.installments >= 1) {
+    const baseDate = new Date()
+    const entries = Array.from({ length: params.installments }, (_, i) => {
+      const payDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1)
+      return {
+        project_id: params.project_id,
+        company_id: params.company_id,
+        consultant_id: params.consultant_id,
+        classification: 'Pagamento Consultor',
+        amount: params.monthly_value,
+        forecast_payment: payDate.toISOString().split('T')[0],
+        status: 'previsto' as const,
+        is_manual: false,
+      }
+    })
+    await supabase.from('entries').insert(entries)
+  }
+
   revalidatePath(`/projetos/${params.project_id}`)
+  revalidatePath('/lancamentos')
 }
 
 /**
- * Vincula parceiro a um projeto.
+ * Vincula parceiro a um projeto e gera lançamentos automáticos de fee.
  */
 export async function addProjectPartner(params: {
   project_id: string
   partner_id: string
   fee_pct: number
   fee_amount: number
+  installments: number
+  company_id: string | null
 }) {
   const supabase = createClient()
 
@@ -139,8 +162,31 @@ export async function addProjectPartner(params: {
     fee_pct: params.fee_pct,
     fee_amount: params.fee_amount,
     fee_paid: 0,
+    installments: params.installments,
   })
 
   if (error) throw error
+
+  // Auto-gerar lançamentos de débito de fee para o parceiro
+  if (params.fee_amount > 0 && params.installments >= 1) {
+    const baseDate = new Date()
+    const amountPerInstallment = params.fee_amount / params.installments
+    const entries = Array.from({ length: params.installments }, (_, i) => {
+      const payDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1)
+      return {
+        project_id: params.project_id,
+        company_id: params.company_id,
+        partner_id: params.partner_id,
+        classification: 'Fee Parceiro',
+        amount: amountPerInstallment,
+        forecast_payment: payDate.toISOString().split('T')[0],
+        status: 'previsto' as const,
+        is_manual: false,
+      }
+    })
+    await supabase.from('entries').insert(entries)
+  }
+
   revalidatePath(`/projetos/${params.project_id}`)
+  revalidatePath('/lancamentos')
 }

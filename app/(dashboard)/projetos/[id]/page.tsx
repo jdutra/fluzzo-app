@@ -74,11 +74,11 @@ const STATUS_FLOW_LABEL: Record<EntryStatus, string | null> = {
   cancelado: null,
 }
 
-type ConsultantForm = { consultant_id: string; role: string; fee_pct: string; installments: string; monthly_value: string }
-type PartnerForm = { partner_id: string; fee_pct: string; fee_amount: string }
+type ConsultantForm = { consultant_id: string; role: string; installments: string; monthly_value: string }
+type PartnerForm = { partner_id: string; fee_pct: string; fee_amount: string; installments: string }
 
-const emptyConsultantForm: ConsultantForm = { consultant_id: '', role: '', fee_pct: '', installments: '1', monthly_value: '' }
-const emptyPartnerForm: PartnerForm = { partner_id: '', fee_pct: '', fee_amount: '' }
+const emptyConsultantForm: ConsultantForm = { consultant_id: '', role: '', installments: '1', monthly_value: '' }
+const emptyPartnerForm: PartnerForm = { partner_id: '', fee_pct: '', fee_amount: '', installments: '1' }
 
 export default function ProjectDetailPage({ params }: { params: { id: string } }) {
   const supabase = createClient()
@@ -212,13 +212,15 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         project_id: projectId,
         consultant_id: newConsultant.consultant_id,
         role: newConsultant.role || null,
-        fee_pct: parseFloat(newConsultant.fee_pct) / 100 || 0,
         installments: parseInt(newConsultant.installments) || 1,
         monthly_value: parseFloat(newConsultant.monthly_value) || 0,
+        company_id: project?.company_id ?? null,
       })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-consultants', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project-entries', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
       setNewConsultant(emptyConsultantForm)
       setAddingConsultant(false)
       toast({ title: 'Consultor adicionado.' })
@@ -246,10 +248,14 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         partner_id: newPartner.partner_id,
         fee_pct: parseFloat(newPartner.fee_pct) / 100 || 0,
         fee_amount: parseFloat(newPartner.fee_amount) || 0,
+        installments: parseInt(newPartner.installments) || 1,
+        company_id: project?.company_id ?? null,
       })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-partners', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project-entries', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
       setNewPartner(emptyPartnerForm)
       setAddingPartner(false)
       toast({ title: 'Parceiro adicionado.' })
@@ -376,7 +382,6 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
   const totalPaid = entries.filter(e => e.status === 'pago').reduce((s, e) => s + e.amount, 0)
   const totalFaturado = entries.filter(e => e.status === 'faturado').reduce((s, e) => s + e.amount, 0)
   const totalPrevisto = entries.filter(e => e.status === 'previsto').reduce((s, e) => s + e.amount, 0)
-  const alreadyLinkedConsultantIds = consultants.map(c => c.consultant.id)
   const alreadyLinkedPartnerIds = partners.map(p => p.partner.id)
 
   return (
@@ -501,35 +506,41 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                           <SelectValue placeholder="Selecionar" />
                         </SelectTrigger>
                         <SelectContent>
-                          {allConsultants
-                            .filter((c) => !alreadyLinkedConsultantIds.includes(c.id))
-                            .map((c) => (
-                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                            ))}
+                          {allConsultants.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <Label className="text-xs">Frente / Papel</Label>
-                      <Input
-                        className="h-8 text-xs mt-1"
-                        placeholder="ex: Implantação"
-                        value={newConsultant.role}
-                        onChange={(e) => setNewConsultant((p) => ({ ...p, role: e.target.value }))}
-                      />
+                      <Label className="text-xs">Produto / Frente</Label>
+                      {projectProducts.length > 0 ? (
+                        <Select
+                          value={newConsultant.role}
+                          onValueChange={(v) => setNewConsultant((p) => ({ ...p, role: v }))}
+                        >
+                          <SelectTrigger className="h-8 text-xs mt-1">
+                            <SelectValue placeholder="Selecionar produto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {projectProducts.filter(pp => pp.product).map((pp) => (
+                              <SelectItem key={pp.id} value={pp.product.sigla}>
+                                {pp.product.sigla} — {pp.product.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          className="h-8 text-xs mt-1"
+                          placeholder="ex: Implantação"
+                          value={newConsultant.role}
+                          onChange={(e) => setNewConsultant((p) => ({ ...p, role: e.target.value }))}
+                        />
+                      )}
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <Label className="text-xs">Fee (%)</Label>
-                      <Input
-                        className="h-8 text-xs mt-1"
-                        type="number" min="0" max="100" step="0.1"
-                        placeholder="ex: 30"
-                        value={newConsultant.fee_pct}
-                        onChange={(e) => setNewConsultant((p) => ({ ...p, fee_pct: e.target.value }))}
-                      />
-                    </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label className="text-xs">Parcelas</Label>
                       <Input
@@ -573,9 +584,8 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                     <p className="font-medium text-slate-800">{c.consultant.name}</p>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500 mt-0.5">
                       {c.role && <span className="text-teal-600 font-medium">{c.role}</span>}
-                      <span>Fee: {(c.fee_pct * 100).toFixed(1)}%</span>
                       <span>{c.installments}x {formatCurrency(c.monthly_value)}</span>
-                      <span className="text-amber-600">Due: {formatCurrency(c.amount_due)}</span>
+                      <span className="text-amber-600">A pagar: {formatCurrency(c.amount_due)}</span>
                     </div>
                   </div>
                   <Button
@@ -632,7 +642,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <Label className="text-xs">Fee (%)</Label>
                       <Input
@@ -640,8 +650,13 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                         type="number" min="0" max="100" step="0.1"
                         placeholder="ex: 10"
                         value={newPartner.fee_pct}
-                        onChange={(e) => setNewPartner((p) => ({ ...p, fee_pct: e.target.value }))}
+                        onChange={(e) => {
+                          const pct = parseFloat(e.target.value) || 0
+                          const amount = project ? (project.revenue * pct / 100).toFixed(2) : ''
+                          setNewPartner((p) => ({ ...p, fee_pct: e.target.value, fee_amount: amount }))
+                        }}
                       />
+                      <p className="text-[10px] text-slate-400 mt-0.5">% da receita do projeto</p>
                     </div>
                     <div>
                       <Label className="text-xs">Valor fee (R$)</Label>
@@ -651,6 +666,16 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                         placeholder="0.00"
                         value={newPartner.fee_amount}
                         onChange={(e) => setNewPartner((p) => ({ ...p, fee_amount: e.target.value }))}
+                      />
+                      <p className="text-[10px] text-slate-400 mt-0.5">Auto ou override manual</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Parcelas</Label>
+                      <Input
+                        className="h-8 text-xs mt-1"
+                        type="number" min="1"
+                        value={newPartner.installments}
+                        onChange={(e) => setNewPartner((p) => ({ ...p, installments: e.target.value }))}
                       />
                     </div>
                   </div>
@@ -679,6 +704,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                       <span>Fee: {(p.fee_pct * 100).toFixed(1)}%</span>
                       <span>Valor: {formatCurrency(p.fee_amount)}</span>
                       <span className="text-amber-600">Pago: {formatCurrency(p.fee_paid)}</span>
+                      {(p as any).installments > 1 && <span>{(p as any).installments}x</span>}
                     </div>
                   </div>
                   <Button
@@ -762,21 +788,21 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                       />
                     </div>
                     <div>
-                      <Label className="text-xs">Prev. pagamento</Label>
-                      <Input
-                        className="h-8 text-xs mt-1"
-                        type="date"
-                        value={entryForm.forecast_payment}
-                        onChange={(e) => setEntryForm((p) => ({ ...p, forecast_payment: e.target.value }))}
-                      />
-                    </div>
-                    <div>
                       <Label className="text-xs">Prev. faturamento</Label>
                       <Input
                         className="h-8 text-xs mt-1"
                         type="date"
                         value={entryForm.forecast_billing}
                         onChange={(e) => setEntryForm((p) => ({ ...p, forecast_billing: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Prev. pagamento</Label>
+                      <Input
+                        className="h-8 text-xs mt-1"
+                        type="date"
+                        value={entryForm.forecast_payment}
+                        onChange={(e) => setEntryForm((p) => ({ ...p, forecast_payment: e.target.value }))}
                       />
                     </div>
                     <div className="sm:col-span-3">
