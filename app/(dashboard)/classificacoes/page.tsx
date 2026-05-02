@@ -241,6 +241,13 @@ export default function ClassificacoesPage() {
 
   const activeCount = classifications.filter((c) => c.active).length
 
+  // Salva classificação padrão no company quando alterado pelo toggle no form
+  async function setCompanyDefault(field: 'default_class_recebimento' | 'default_class_fee' | 'default_class_consultor', name: string | null) {
+    if (!company?.id) return
+    await supabase.from('companies').update({ [field]: name }).eq('id', (company as any).id)
+    queryClient.invalidateQueries({ queryKey: ['company'] })
+  }
+
   // ── Render ────────────────────────────────────────────────
 
   return (
@@ -398,6 +405,11 @@ export default function ClassificacoesPage() {
                     depth={0}
                     onEdit={openEdit}
                     onDelete={setDeleteTarget}
+                    defaultNames={{
+                      recebimento: company?.default_class_recebimento ?? undefined,
+                      consultor: company?.default_class_consultor ?? undefined,
+                      fee: company?.default_class_fee ?? undefined,
+                    }}
                   />
                 ))}
               </tbody>
@@ -524,6 +536,37 @@ export default function ClassificacoesPage() {
               </Select>
             </div>
 
+            {/* Padrões de projeto — apenas para não-totalizadores */}
+            {!form.is_totalizador && editing && (
+              <div className="space-y-2 rounded-lg border border-teal-100 bg-teal-50 p-4">
+                <p className="text-xs font-semibold text-teal-800">Padrão de projeto</p>
+                <p className="text-[11px] text-teal-600 -mt-1">Só pode existir um padrão por categoria.</p>
+                {([
+                  { field: 'default_class_recebimento' as const, label: 'Receita de consultoria', current: company?.default_class_recebimento },
+                  { field: 'default_class_consultor' as const, label: 'Pagamento de equipe', current: company?.default_class_consultor },
+                  { field: 'default_class_fee' as const, label: 'Pagamento de fee', current: company?.default_class_fee },
+                ] as const).map(({ field, label, current }) => {
+                  const isDefault = current === editing.name
+                  return (
+                    <div key={field} className="flex items-center justify-between">
+                      <span className="text-xs text-teal-700">{label}</span>
+                      <button
+                        type="button"
+                        onClick={() => setCompanyDefault(field, isDefault ? null : editing.name)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                          isDefault ? 'bg-teal-600' : 'bg-slate-200'
+                        }`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                          isDefault ? 'translate-x-[18px]' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
           </div>
 
           <SheetFooter className="pt-6 gap-2">
@@ -560,11 +603,13 @@ function TreeRows({
   depth,
   onEdit,
   onDelete,
+  defaultNames,
 }: {
   node: TreeNode
   depth: number
   onEdit: (c: Classification) => void
   onDelete: (c: Classification) => void
+  defaultNames: { recebimento?: string; consultor?: string; fee?: string }
 }) {
   const indent = depth * 20
 
@@ -583,6 +628,15 @@ function TreeRows({
               <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-[10px] px-1.5 py-0 h-4">
                 Σ Total
               </Badge>
+            )}
+            {defaultNames.recebimento === node.name && (
+              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] px-1.5 py-0 h-4">Receita</Badge>
+            )}
+            {defaultNames.consultor === node.name && (
+              <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] px-1.5 py-0 h-4">Equipe</Badge>
+            )}
+            {defaultNames.fee === node.name && (
+              <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-[10px] px-1.5 py-0 h-4">Fee</Badge>
             )}
           </div>
         </td>
@@ -632,6 +686,7 @@ function TreeRows({
           depth={depth + 1}
           onEdit={onEdit}
           onDelete={onDelete}
+          defaultNames={defaultNames}
         />
       ))}
     </>

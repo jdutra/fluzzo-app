@@ -100,6 +100,7 @@ export async function addProjectConsultant(params: {
   project_id: string
   consultant_id: string
   role: string | null
+  billing_start_date: string | null
   installments: number
   monthly_value: number
   company_id: string | null
@@ -107,10 +108,18 @@ export async function addProjectConsultant(params: {
   const supabase = createClient()
   const amount_due = params.monthly_value * params.installments
 
+  // Busca classificação padrão para equipe
+  const { data: companyData } = await supabase
+    .from('companies')
+    .select('default_class_consultor')
+    .single()
+  const classConsultor = (companyData as any)?.default_class_consultor ?? 'Pagamento Consultor'
+
   const { error } = await supabase.from('project_consultants').insert({
     project_id: params.project_id,
     consultant_id: params.consultant_id,
     role: params.role,
+    billing_start_date: params.billing_start_date,
     fee_pct: 0,
     amount_due,
     amount_paid: 0,
@@ -122,14 +131,16 @@ export async function addProjectConsultant(params: {
 
   // Auto-gerar lançamentos de débito para o consultor
   if (amount_due > 0 && params.installments >= 1) {
-    const baseDate = new Date()
+    const baseDate = params.billing_start_date
+      ? new Date(params.billing_start_date + 'T00:00:00')
+      : new Date()
     const entries = Array.from({ length: params.installments }, (_, i) => {
-      const payDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1)
+      const payDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, baseDate.getDate())
       return {
         project_id: params.project_id,
         company_id: params.company_id,
         consultant_id: params.consultant_id,
-        classification: 'Pagamento Consultor',
+        classification: classConsultor,
         amount: params.monthly_value,
         forecast_payment: payDate.toISOString().split('T')[0],
         status: 'previsto' as const,

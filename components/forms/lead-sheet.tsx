@@ -27,6 +27,8 @@ const STAGES = ['qualificacao', 'diagnostico', 'proposta', 'negociacao', 'fechad
 const schema = z.object({
   title: z.string().min(2, 'Título obrigatório'),
   client_id: z.string().optional(),
+  partner_id: z.string().optional(),
+  partner_fee_pct: z.coerce.number().min(0).max(100).optional(),
   estimated_value: z.coerce.number().min(0).optional(),
   stage: z.enum(STAGES),
   responsible: z.string().optional(),
@@ -52,14 +54,23 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
   const queryClient = useQueryClient()
   const isEditing = !!lead
   const [selectedProducts, setSelectedProducts] = useState<ProductRow[]>([])
-  const [showConvertDialog, setShowConvertDialog] = useState(false)
+  const [showConvertSheet, setShowConvertSheet] = useState(false)
   const [pendingConvertLeadId, setPendingConvertLeadId] = useState<string | null>(null)
+  const [convertForm, setConvertForm] = useState({ installments: '1', billing_start_date: '' })
 
   const { data: company } = useQuery({
     queryKey: ['company'],
     queryFn: async () => {
       const { data } = await supabase.from('companies').select('id').single()
       return data
+    },
+  })
+
+  const { data: partners = [] } = useQuery({
+    queryKey: ['partners-active'],
+    queryFn: async () => {
+      const { data } = await supabase.from('partners').select('id, name').order('name')
+      return data ?? []
     },
   })
 
@@ -122,6 +133,8 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
       reset({
         title: lead.title,
         client_id: lead.client_id ?? '',
+        partner_id: (lead as any).partner_id ?? '',
+        partner_fee_pct: (lead as any).partner_fee_pct ?? undefined,
         estimated_value: lead.estimated_value ?? undefined,
         stage: (lead.stage as typeof STAGES[number]) ?? 'qualificacao',
         responsible: lead.responsible ?? '',
@@ -163,17 +176,19 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
   }
 
   const convertMutation = useMutation({
-    mutationFn: async (leadId: string) => convertLeadToProject(leadId),
+    mutationFn: async ({ leadId, installments, billing_start_date }: { leadId: string; installments: number; billing_start_date: string }) =>
+      convertLeadToProject(leadId, { installments, billing_start_date }),
     onSuccess: () => {
       toast({ title: 'Lead convertido em projeto com sucesso!' })
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      setShowConvertDialog(false)
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
+      setShowConvertSheet(false)
       setPendingConvertLeadId(null)
     },
     onError: (e: Error) => {
       toast({ title: 'Erro ao converter.', description: e.message, variant: 'destructive' })
-      setShowConvertDialog(false)
+      setShowConvertSheet(false)
       setPendingConvertLeadId(null)
     },
   })
@@ -183,6 +198,8 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
       const payload = {
         title: data.title,
         client_id: data.client_id || null,
+        partner_id: data.partner_id || null,
+        partner_fee_pct: data.partner_fee_pct ?? null,
         product_id: selectedProducts[0]?.id ?? null, // manter compat com campo legado
         estimated_value: productsTotal > 0 ? productsTotal : (data.estimated_value ?? null),
         stage: data.stage,
@@ -191,7 +208,7 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
         next_step: data.next_step || null,
         next_step_date: data.next_step_date || null,
         lost_reason: data.lost_reason || null,
-        company_id: company?.id ?? null,
+        company_id: (company as any)?.id ?? null,
       }
 
       let leadId: string
@@ -226,7 +243,8 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
       onSuccess()
       if (stage === 'fechado' && !lead?.converted_project_id) {
         setPendingConvertLeadId(leadId)
-        setShowConvertDialog(true)
+        setConvertForm({ installments: '1', billing_start_date: '' })
+        setShowConvertSheet(true)
       }
     },
     onError: (e: Error) => toast({ title: 'Erro ao salvar.', description: e.message, variant: 'destructive' }),
@@ -234,19 +252,50 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
 
   return (
     <>
-      <ConfirmDialog
-        open={showConvertDialog}
-        onOpenChange={(v) => {
-          if (!v) { setShowConvertDialog(false); setPendingConvertLeadId(null) }
-        }}
-        title="Converter em projeto"
-        description="Este lead foi marcado como fechado. Deseja convertê-lo em projeto agora?"
-        confirmLabel="Sim, converter"
-        cancelLabel="Apenas salvar"
-        variant="default"
-        loading={convertMutation.isPending}
-        onConfirm={() => pendingConvertLeadId && convertMutation.mutate(pendingConvertLeadId)}
-      />
+      {/* Sheet de conversão para projeto */}
+      <Sheet open={showConvertSheet} onOpenChange={(v) => { if (!v) { setShowConvertSheet(false); setPendingConvertLeadId(null) } }}>
+        <SheetContent className="w-full sm:max-w-md">
+          <SheetHeader className="mb-6">
+            <SheetTitle>Converter em Projeto</SheetTitle>
+            <SheetDescription>Defina o parcelamento e a data inicial de faturamento para gerar os lançamentos automaticamente.</SheetDescription>
+          </SheetHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Número de parcelas</Label>
+              <Input
+                type="number" min="1" max="60"
+                value={convertForm.installments}
+                onChange={(e) => setConvertForm(f => ({ ...f, installments: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Data inicial de faturamento</Label>
+              <Input
+                type="date"
+                value={convertForm.billing_start_date}
+                onChange={(e) => setConvertForm(f => ({ ...f, billing_start_date: e.target.value }))}
+              />
+            </div>
+          </div>
+          <SheetFooter className="pt-6 gap-2">
+            <Button variant="outline" onClick={() => { setShowConvertSheet(false); setPendingConvertLeadId(null) }}>
+              Apenas salvar
+            </Button>
+            <Button
+              className="bg-teal-600 hover:bg-teal-700"
+              disabled={convertMutation.isPending || !convertForm.billing_start_date}
+              onClick={() => pendingConvertLeadId && convertMutation.mutate({
+                leadId: pendingConvertLeadId,
+                installments: parseInt(convertForm.installments) || 1,
+                billing_start_date: convertForm.billing_start_date,
+              })}
+            >
+              {convertMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+              Sim, converter
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader className="mb-6">
@@ -272,6 +321,27 @@ export function LeadSheet({ open, onOpenChange, lead, onSuccess }: LeadSheetProp
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Parceiro + Fee */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Parceiro</Label>
+                <Select value={watch('partner_id') ?? ''} onValueChange={(v) => setValue('partner_id', v === '__none__' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="Sem parceiro" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— Sem parceiro —</SelectItem>
+                    {partners.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Fee do parceiro (%)</Label>
+                <Input type="number" min="0" max="100" step="0.1" placeholder="0"
+                  {...register('partner_fee_pct')} disabled={!watch('partner_id')} />
+              </div>
             </div>
 
             {/* Produtos (múltiplos) com valor individual */}

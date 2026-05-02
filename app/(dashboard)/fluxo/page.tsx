@@ -459,6 +459,7 @@ export default function FluxoPage() {
                   values={monthPeriods.map(p => spreadsheet.saldoInicial[p])}
                   variant="highlight-blue"
                   fmt={fmtCell}
+                  totalMode="last"
                 />
 
                 {/* ══ GRUPO: Entradas Operacionais ══ */}
@@ -511,6 +512,11 @@ export default function FluxoPage() {
                   values={monthPeriods.map(p => spreadsheet.geracaoOpByMonth[p])}
                   variant="saldo"
                   fmt={fmtCell}
+                  pctValues={monthPeriods.map(p =>
+                    spreadsheet.totalEntradaOpByMonth[p] > 0
+                      ? (spreadsheet.geracaoOpByMonth[p] / spreadsheet.totalEntradaOpByMonth[p]) * 100
+                      : 0
+                  )}
                 />
 
                 {/* ══ GRUPO: Entradas Não Operacionais ══ */}
@@ -571,6 +577,11 @@ export default function FluxoPage() {
                   values={monthPeriods.map(p => spreadsheet.geracaoLiquidaByMonth[p])}
                   variant="saldo-dark"
                   fmt={fmtCell}
+                  pctValues={monthPeriods.map(p =>
+                    spreadsheet.totalEntradaOpByMonth[p] > 0
+                      ? (spreadsheet.geracaoLiquidaByMonth[p] / spreadsheet.totalEntradaOpByMonth[p]) * 100
+                      : 0
+                  )}
                 />
 
                 {/* ── Margem Líquida ── */}
@@ -592,6 +603,7 @@ export default function FluxoPage() {
                   values={monthPeriods.map(p => spreadsheet.saldoAcumulado[p])}
                   variant="highlight-blue-bold"
                   fmt={fmtCell}
+                  totalMode="last"
                 />
 
               </tbody>
@@ -780,7 +792,7 @@ function SpreadGroupHeader({
 }
 
 function SpreadRow({
-  label, values, variant, fmt, empty = false, totalFmt,
+  label, values, variant, fmt, empty = false, totalFmt, pctValues, totalMode = 'sum',
 }: {
   label: string
   values: number[]
@@ -788,8 +800,10 @@ function SpreadRow({
   fmt: (v: number) => string
   empty?: boolean
   totalFmt?: (values: number[]) => string
+  pctValues?: number[]
+  totalMode?: 'sum' | 'last'
 }) {
-  const total = values.reduce((s, v) => s + v, 0)
+  const total = totalMode === 'last' ? values[values.length - 1] : values.reduce((s, v) => s + v, 0)
 
   const styles: Record<SpreadVariant, { row: string; cell: (v: number) => string; first: string; totalCell: string }> = {
     detail: {
@@ -832,16 +846,29 @@ function SpreadRow({
 
   const s = styles[variant]
 
+  const totalPct = pctValues
+    ? (totalMode === 'last' ? pctValues[pctValues.length - 1] : pctValues.reduce((s, v) => s + v, 0) / pctValues.length)
+    : null
+
   return (
     <tr className={s.row}>
       <td className={s.first}>{label}</td>
-      {values.map((v, i) => (
-        <td key={i} className={`px-2 py-1.5 text-right ${s.cell(v)} ${v === 0 && !empty ? 'opacity-40' : ''}`}>
-          {empty ? '—' : fmt(v)}
-        </td>
-      ))}
+      {values.map((v, i) => {
+        const pct = pctValues?.[i]
+        return (
+          <td key={i} className={`px-2 py-1.5 text-right ${s.cell(v)} ${v === 0 && !empty ? 'opacity-40' : ''}`}>
+            {empty ? '—' : fmt(v)}
+            {pct !== undefined && pct !== 0 && (
+              <div className="text-[9px] opacity-70 font-normal leading-tight">{pct.toFixed(1)}%</div>
+            )}
+          </td>
+        )
+      })}
       <td className={`px-2 py-1.5 text-right ${s.totalCell}`}>
         {empty ? '—' : totalFmt ? totalFmt(values) : fmt(total)}
+        {totalPct !== null && totalPct !== 0 && (
+          <div className="text-[9px] opacity-70 font-normal leading-tight">{totalPct.toFixed(1)}%</div>
+        )}
       </td>
     </tr>
   )

@@ -27,7 +27,7 @@ const ESTADOS_BR = [
 const schema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
   cnpj: z.string().optional(),
-  type: z.enum(['Fluzzo', 'Cliente', 'Lead']),
+  type: z.enum(['Cliente', 'Lead']),
   contact: z.string().optional(),
   start_date: z.string().optional(),
   segment_macro: z.string().optional(),
@@ -95,7 +95,7 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
       reset({
         name: client.name,
         cnpj: client.cnpj ?? '',
-        type: (client.type as 'Fluzzo' | 'Cliente' | 'Lead') ?? 'Cliente',
+        type: (client.type === 'Fluzzo' ? 'Cliente' : (client.type as 'Cliente' | 'Lead')) ?? 'Cliente',
         contact: client.contact ?? '',
         start_date: client.start_date ?? '',
         segment_macro: client.segment_macro ?? '',
@@ -233,12 +233,11 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
               </div>
               <div className="space-y-1.5">
                 <Label>Tipo</Label>
-                <Select value={watch('type')} onValueChange={(v) => setValue('type', v as 'Fluzzo' | 'Cliente' | 'Lead')}>
+                <Select value={watch('type')} onValueChange={(v) => setValue('type', v as 'Cliente' | 'Lead')}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Lead">Lead</SelectItem>
                     <SelectItem value="Cliente">Cliente</SelectItem>
-                    <SelectItem value="Fluzzo">Fluzzo</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

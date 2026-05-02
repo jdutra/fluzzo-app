@@ -24,7 +24,7 @@ import {
 } from '@/lib/utils'
 import type { Project, Entry, EntryStatus } from '@/lib/supabase/types'
 import Link from 'next/link'
-import { updateEntryStatus, createManualEntry, updateEntry, deleteEntry } from '@/lib/actions/entries'
+import { updateEntryStatus, createManualEntry, createManualEntries, updateEntry, deleteEntry } from '@/lib/actions/entries'
 import { addProjectConsultant, addProjectPartner } from '@/lib/actions/projects'
 
 type ProjectDetail = Project & {
@@ -57,6 +57,7 @@ type ProjectPartnerRow = {
 type ProjectProductRow = {
   id: string
   product_id: string
+  value: number | null
   product: { id: string; sigla: string; name: string }
 }
 
@@ -74,10 +75,10 @@ const STATUS_FLOW_LABEL: Record<EntryStatus, string | null> = {
   cancelado: null,
 }
 
-type ConsultantForm = { consultant_id: string; role: string; installments: string; monthly_value: string }
+type ConsultantForm = { consultant_id: string; role: string; billing_start_date: string; installments: string; monthly_value: string }
 type PartnerForm = { partner_id: string; fee_pct: string; fee_amount: string; installments: string }
 
-const emptyConsultantForm: ConsultantForm = { consultant_id: '', role: '', installments: '1', monthly_value: '' }
+const emptyConsultantForm: ConsultantForm = { consultant_id: '', role: '', billing_start_date: '', installments: '1', monthly_value: '' }
 const emptyPartnerForm: PartnerForm = { partner_id: '', fee_pct: '', fee_amount: '', installments: '1' }
 
 export default function ProjectDetailPage({ params }: { params: { id: string } }) {
@@ -92,8 +93,8 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
   const [newPartner, setNewPartner] = useState<PartnerForm>(emptyPartnerForm)
 
   // Estado para criar/editar lançamentos
-  type EntryForm = { classification: string; amount: string; forecast_payment: string; forecast_billing: string; notes: string }
-  const emptyEntryForm: EntryForm = { classification: 'Receita', amount: '', forecast_payment: '', forecast_billing: '', notes: '' }
+  type EntryForm = { classification: string; amount: string; forecast_payment: string; forecast_billing: string; notes: string; repetitions: string }
+  const emptyEntryForm: EntryForm = { classification: 'Receita', amount: '', forecast_payment: '', forecast_billing: '', notes: '', repetitions: '1' }
   const [addingEntry, setAddingEntry] = useState(false)
   const [editingEntry, setEditingEntry] = useState<EntryRow | null>(null)
   const [entryForm, setEntryForm] = useState<EntryForm>(emptyEntryForm)
@@ -158,7 +159,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         .select('*, product:products(id, sigla, name)')
         .eq('project_id', projectId)
       if (error) throw error
-      return (data ?? []) as ProjectProductRow[]
+      return (data ?? []).map((r: any) => ({ ...r, value: r.value ?? null })) as ProjectProductRow[]
     },
   })
 
@@ -212,6 +213,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         project_id: projectId,
         consultant_id: newConsultant.consultant_id,
         role: newConsultant.role || null,
+        billing_start_date: newConsultant.billing_start_date || null,
         installments: parseInt(newConsultant.installments) || 1,
         monthly_value: parseFloat(newConsultant.monthly_value) || 0,
         company_id: project?.company_id ?? null,
@@ -283,7 +285,8 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
   const createEntryMutation = useMutation({
     mutationFn: async () => {
       if (!entryForm.amount || parseFloat(entryForm.amount) <= 0) throw new Error('Informe um valor válido')
-      await createManualEntry({
+      const reps = parseInt(entryForm.repetitions) || 1
+      const base = {
         project_id: projectId,
         company_id: project?.company_id ?? null,
         client_id: project?.client_id ?? null,
@@ -292,10 +295,16 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         forecast_payment: entryForm.forecast_payment || null,
         forecast_billing: entryForm.forecast_billing || null,
         notes: entryForm.notes || null,
-      })
+      }
+      if (reps > 1) {
+        await createManualEntries({ ...base, repetitions: reps })
+      } else {
+        await createManualEntry(base)
+      }
     },
     onSuccess: () => {
-      toast({ title: 'Lançamento criado.' })
+      const reps = parseInt(entryForm.repetitions) || 1
+      toast({ title: reps > 1 ? `${reps} lançamentos criados.` : 'Lançamento criado.' })
       invalidateEntries()
       setAddingEntry(false)
       setEntryForm(emptyEntryForm)
@@ -344,6 +353,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
       forecast_payment: entry.forecast_payment ?? '',
       forecast_billing: entry.forecast_billing ?? '',
       notes: entry.notes ?? '',
+      repetitions: '1',
     })
     setAddingEntry(false)
   }
@@ -423,11 +433,27 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               <InfoRow icon={CalendarDays} label="Início faturamento" value={project.billing_start_date ? formatDate(project.billing_start_date) : null} />
               <InfoRow icon={FileText} label="Purchase Order" value={project.purchase_order} />
               {projectProducts.filter(pp => pp.product).length > 0 && (
-                <InfoRow
-                  icon={Package}
-                  label="Produtos"
-                  value={projectProducts.filter(pp => pp.product).map(pp => pp.product.sigla).join(' · ')}
-                />
+                <div className="flex items-start gap-2.5">
+                  <Package size={14} className="text-slate-400 mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-1">Produtos</p>
+                    <div className="space-y-1">
+                      {projectProducts.filter(pp => pp.product).map(pp => (
+                        <div key={pp.id} className="flex items-center justify-between gap-2">
+                          <span className="text-slate-700 text-xs">
+                            <span className="font-mono text-teal-600 mr-1">{pp.product.sigla}</span>
+                            {pp.product.name}
+                          </span>
+                          {pp.value != null && (
+                            <span className="text-xs font-medium text-slate-600 shrink-0">
+                              {formatCurrency(pp.value)}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               )}
               <Separator />
               <div className="grid grid-cols-2 gap-3">
@@ -513,34 +539,25 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                       </Select>
                     </div>
                     <div>
-                      <Label className="text-xs">Produto / Frente</Label>
-                      {projectProducts.length > 0 ? (
-                        <Select
-                          value={newConsultant.role}
-                          onValueChange={(v) => setNewConsultant((p) => ({ ...p, role: v }))}
-                        >
-                          <SelectTrigger className="h-8 text-xs mt-1">
-                            <SelectValue placeholder="Selecionar produto" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {projectProducts.filter(pp => pp.product).map((pp) => (
-                              <SelectItem key={pp.id} value={pp.product.sigla}>
-                                {pp.product.sigla} — {pp.product.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          className="h-8 text-xs mt-1"
-                          placeholder="ex: Implantação"
-                          value={newConsultant.role}
-                          onChange={(e) => setNewConsultant((p) => ({ ...p, role: e.target.value }))}
-                        />
-                      )}
+                      <Label className="text-xs">Papel</Label>
+                      <Input
+                        className="h-8 text-xs mt-1"
+                        placeholder="ex: Implantação, Suporte"
+                        value={newConsultant.role}
+                        onChange={(e) => setNewConsultant((p) => ({ ...p, role: e.target.value }))}
+                      />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-xs">Início recebimento</Label>
+                      <Input
+                        className="h-8 text-xs mt-1"
+                        type="date"
+                        value={newConsultant.billing_start_date}
+                        onChange={(e) => setNewConsultant((p) => ({ ...p, billing_start_date: e.target.value }))}
+                      />
+                    </div>
                     <div>
                       <Label className="text-xs">Parcelas</Label>
                       <Input
@@ -805,7 +822,24 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                         onChange={(e) => setEntryForm((p) => ({ ...p, forecast_payment: e.target.value }))}
                       />
                     </div>
-                    <div className="sm:col-span-3">
+                    {!editingEntry && (
+                      <div>
+                        <Label className="text-xs">Repetições</Label>
+                        <Input
+                          className="h-8 text-xs mt-1"
+                          type="number" min="1" max="60"
+                          value={entryForm.repetitions}
+                          onChange={(e) => setEntryForm((p) => ({ ...p, repetitions: e.target.value }))}
+                          title="Gera N lançamentos mensais consecutivos"
+                        />
+                        {parseInt(entryForm.repetitions) > 1 && (
+                          <p className="text-[10px] text-teal-600 mt-0.5">
+                            Gera {entryForm.repetitions}× mensais a partir da data informada
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    <div className={editingEntry ? 'sm:col-span-3' : 'sm:col-span-2'}>
                       <Label className="text-xs">Observação</Label>
                       <Input
                         className="h-8 text-xs mt-1"

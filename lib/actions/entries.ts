@@ -128,6 +128,52 @@ export async function createManualEntry(params: {
 }
 
 /**
+ * Cria N lançamentos manuais recorrentes (mensais) em um projeto.
+ * Cada lançamento incrementa forecast_payment e forecast_billing em 1 mês.
+ */
+export async function createManualEntries(params: {
+  project_id: string
+  company_id: string | null
+  client_id: string | null
+  classification: string
+  amount: number
+  forecast_payment: string | null
+  forecast_billing: string | null
+  notes: string | null
+  repetitions: number
+}) {
+  const supabase = createClient()
+
+  const addMonths = (dateStr: string | null, months: number): string | null => {
+    if (!dateStr) return null
+    const d = new Date(dateStr + 'T00:00:00')
+    return new Date(d.getFullYear(), d.getMonth() + months, d.getDate())
+      .toISOString().split('T')[0]
+  }
+
+  const entries = Array.from({ length: params.repetitions }, (_, i) => ({
+    project_id: params.project_id,
+    company_id: params.company_id,
+    client_id: params.client_id,
+    classification: params.classification,
+    amount: params.amount,
+    forecast_payment: addMonths(params.forecast_payment, i),
+    forecast_billing: addMonths(params.forecast_billing, i),
+    notes: params.notes || null,
+    status: 'previsto' as const,
+    is_manual: true,
+    installment: i + 1,
+    order_num: i + 1,
+  }))
+
+  const { error } = await supabase.from('entries').insert(entries)
+  if (error) throw error
+
+  revalidatePath(`/projetos/${params.project_id}`)
+  revalidatePath('/lancamentos')
+}
+
+/**
  * Atualiza dados de um lançamento (valor, classificação, datas, notas).
  */
 export async function updateEntry(

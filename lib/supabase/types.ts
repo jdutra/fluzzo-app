@@ -186,6 +186,8 @@ export type Lead = {
   next_step: string | null
   next_step_date: string | null
   converted_project_id: string | null
+  partner_id: string | null
+  partner_fee_pct: number | null
   created_at: string
   updated_at: string
 }
@@ -259,6 +261,7 @@ export type ProjectConsultant = {
   balance: number // generated always
   installments: number
   monthly_value: number
+  billing_start_date: string | null
 }
 
 export type ProjectPartner = {

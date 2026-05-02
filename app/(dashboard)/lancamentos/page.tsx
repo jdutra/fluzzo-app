@@ -30,6 +30,8 @@ import Link from 'next/link'
 type EntryWithRelations = Entry & {
   project: { id: string; code: number } | null
   client: { id: string; name: string } | null
+  consultant: { id: string; name: string } | null
+  partner: { id: string; name: string } | null
 }
 
 const ALL_STATUSES: EntryStatus[] = ['previsto', 'faturado', 'pago', 'cancelado']
@@ -85,7 +87,7 @@ export default function LancamentosPage() {
 
       const { data, error } = await supabase
         .from('entries')
-        .select('*, project:projects(id, code), client:clients(id, name)')
+        .select('*, project:projects(id, code), client:clients(id, name), consultant:consultants(id, name), partner:partners(id, name)')
         .gte('forecast_payment', startDate)
         .lte('forecast_payment', endDate)
         .order('forecast_payment')
@@ -298,6 +300,7 @@ export default function LancamentosPage() {
                 <tr className="border-b border-slate-100 bg-slate-50">
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Projeto</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Cliente</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide hidden md:table-cell">Para quem</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Classificação</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Parcela</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Valor</th>
@@ -333,6 +336,17 @@ export default function LancamentosPage() {
                       {/* Cliente */}
                       <td className="px-4 py-3 text-slate-700">
                         {entry.client?.name ?? <span className="text-slate-400">—</span>}
+                      </td>
+
+                      {/* Para quem */}
+                      <td className="px-4 py-3 text-xs hidden md:table-cell">
+                        {entry.consultant?.name ? (
+                          <span className="text-blue-600">{entry.consultant.name}</span>
+                        ) : entry.partner?.name ? (
+                          <span className="text-orange-600">{entry.partner.name}</span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
                       </td>
 
                       {/* Classificação — inline Select */}

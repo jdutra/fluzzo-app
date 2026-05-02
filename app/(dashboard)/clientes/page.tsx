@@ -137,7 +137,7 @@ export default function ClientesPage() {
         </div>
         <div className="h-5 w-px bg-slate-200" />
         {/* Filtro tipo */}
-        {(['all', 'Cliente', 'Lead', 'Fluzzo'] as const).map((t) => (
+        {(['all', 'Cliente', 'Lead'] as const).map((t) => (
           <button key={t}
             onClick={() => setTypeFilter(t)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
