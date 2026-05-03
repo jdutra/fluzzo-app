@@ -179,6 +179,14 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
     },
   })
 
+  const { data: company } = useQuery<{ encargo_simples: number } | null>({
+    queryKey: ['company'],
+    queryFn: async () => {
+      const { data } = await supabase.from('companies').select('encargo_simples').single()
+      return data ?? null
+    },
+  })
+
   const { data: classifications = [] } = useQuery<{ id: string; name: string; parent_id: string | null }[]>({
     queryKey: ['classifications-active'],
     queryFn: async () => {
@@ -669,11 +677,13 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                         value={newPartner.fee_pct}
                         onChange={(e) => {
                           const pct = parseFloat(e.target.value) || 0
-                          const amount = project ? (project.revenue * pct / 100).toFixed(2) : ''
+                          const encargo = company?.encargo_simples ?? 0
+                          const netRevenue = project ? project.revenue * (1 - encargo) : 0
+                          const amount = (netRevenue * pct / 100).toFixed(2)
                           setNewPartner((p) => ({ ...p, fee_pct: e.target.value, fee_amount: amount }))
                         }}
                       />
-                      <p className="text-[10px] text-slate-400 mt-0.5">% da receita do projeto</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">% da receita líquida (descontado encargo)</p>
                     </div>
                     <div>
                       <Label className="text-xs">Valor fee (R$)</Label>

@@ -108,10 +108,11 @@ export async function addProjectConsultant(params: {
   const supabase = createClient()
   const amount_due = params.monthly_value * params.installments
 
-  // Busca classificação padrão para equipe
+  // Busca classificação padrão para equipe (filtrado por company_id)
   const { data: companyData } = await supabase
     .from('companies')
-    .select('default_class_consultor')
+    .select('default_class_consultor, encargo_simples')
+    .eq('id', params.company_id as any)
     .single()
   const classConsultor = (companyData as any)?.default_class_consultor ?? 'Pagamento Consultor'
 
@@ -145,6 +146,8 @@ export async function addProjectConsultant(params: {
         forecast_payment: payDate.toISOString().split('T')[0],
         status: 'previsto' as const,
         is_manual: false,
+        installment: i + 1,
+        order_num: i + 1,
       }
     })
     await supabase.from('entries').insert(entries)
@@ -167,6 +170,14 @@ export async function addProjectPartner(params: {
 }) {
   const supabase = createClient()
 
+  // Busca classificação padrão de fee e encargo da empresa
+  const { data: companyData } = await supabase
+    .from('companies')
+    .select('default_class_fee, encargo_simples')
+    .eq('id', params.company_id as any)
+    .single()
+  const classFee = (companyData as any)?.default_class_fee ?? 'Fee Parceiro'
+
   const { error } = await supabase.from('project_partners').insert({
     project_id: params.project_id,
     partner_id: params.partner_id,
@@ -188,11 +199,13 @@ export async function addProjectPartner(params: {
         project_id: params.project_id,
         company_id: params.company_id,
         partner_id: params.partner_id,
-        classification: 'Fee Parceiro',
+        classification: classFee,
         amount: amountPerInstallment,
         forecast_payment: payDate.toISOString().split('T')[0],
         status: 'previsto' as const,
         is_manual: false,
+        installment: i + 1,
+        order_num: i + 1,
       }
     })
     await supabase.from('entries').insert(entries)

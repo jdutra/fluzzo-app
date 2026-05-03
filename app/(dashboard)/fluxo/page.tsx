@@ -66,7 +66,13 @@ export default function FluxoPage() {
   const { data: classifications = [] } = useQuery({
     queryKey: ['classifications'],
     queryFn: async () => {
-      const { data } = await supabase.from('classifications').select('name, type').eq('active', true)
+      const { data } = await supabase
+        .from('classifications')
+        .select('name, type, sort_order')
+        .eq('active', true)
+        .eq('is_totalizador', false)
+        .order('sort_order')
+        .order('name')
       return data ?? []
     },
   })
@@ -217,6 +223,18 @@ export default function FluxoPage() {
       saldoAcumulado[p] = acc
     }
 
+    // Sorted classification names (by sort_order from query, falling back to Object.keys order)
+    const sortedEntradaNames = classifications
+      .filter((c: any) => c.type !== 'saida' && byClassEntrada[c.name])
+      .map((c: any) => c.name)
+    // Add any names that exist in data but weren't in classifications list
+    Object.keys(byClassEntrada).forEach((n) => { if (!sortedEntradaNames.includes(n)) sortedEntradaNames.push(n) })
+
+    const sortedSaidaNames = classifications
+      .filter((c: any) => c.type !== 'entrada' && byClassSaida[c.name])
+      .map((c: any) => c.name)
+    Object.keys(byClassSaida).forEach((n) => { if (!sortedSaidaNames.includes(n)) sortedSaidaNames.push(n) })
+
     return {
       byClassEntrada, byClassSaida, byEntrada, bySaida,
       totalEntradaOpByMonth, totalSaidaOpByMonth,
@@ -224,6 +242,7 @@ export default function FluxoPage() {
       geracaoOpByMonth, geracaoNaoOpByMonth,
       geracaoLiquidaByMonth, margemLiquidaByMonth,
       saldoAcumulado, saldoInicial,
+      sortedEntradaNames, sortedSaidaNames,
     }
   }, [entryData, manualData, monthPeriods, classifications, company, view])
 
@@ -471,16 +490,16 @@ export default function FluxoPage() {
                   color="green"
                   fmt={fmtCell}
                 />
-                {expandedGroups.has('entrada-op') && Object.entries(spreadsheet.byClassEntrada).map(([cls, byMonth]) => (
+                {expandedGroups.has('entrada-op') && spreadsheet.sortedEntradaNames.map((cls) => (
                   <SpreadRow
                     key={cls}
                     label={cls}
-                    values={monthPeriods.map(p => byMonth[p] ?? 0)}
+                    values={monthPeriods.map(p => (spreadsheet.byClassEntrada[cls]?.[p]) ?? 0)}
                     variant="detail"
                     fmt={fmtCell}
                   />
                 ))}
-                {expandedGroups.has('entrada-op') && Object.keys(spreadsheet.byClassEntrada).length === 0 && (
+                {expandedGroups.has('entrada-op') && spreadsheet.sortedEntradaNames.length === 0 && (
                   <SpreadRow label="(sem lançamentos)" values={monthPeriods.map(() => 0)} variant="detail" fmt={fmtCell} empty />
                 )}
 
@@ -493,16 +512,16 @@ export default function FluxoPage() {
                   color="red"
                   fmt={fmtCell}
                 />
-                {expandedGroups.has('saida-op') && Object.entries(spreadsheet.byClassSaida).map(([cls, byMonth]) => (
+                {expandedGroups.has('saida-op') && spreadsheet.sortedSaidaNames.map((cls) => (
                   <SpreadRow
                     key={cls}
                     label={cls}
-                    values={monthPeriods.map(p => byMonth[p] ?? 0)}
+                    values={monthPeriods.map(p => (spreadsheet.byClassSaida[cls]?.[p]) ?? 0)}
                     variant="detail"
                     fmt={fmtCell}
                   />
                 ))}
-                {expandedGroups.has('saida-op') && Object.keys(spreadsheet.byClassSaida).length === 0 && (
+                {expandedGroups.has('saida-op') && spreadsheet.sortedSaidaNames.length === 0 && (
                   <SpreadRow label="(sem lançamentos)" values={monthPeriods.map(() => 0)} variant="detail" fmt={fmtCell} empty />
                 )}
 

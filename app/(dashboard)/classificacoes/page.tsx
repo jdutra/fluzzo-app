@@ -229,7 +229,7 @@ export default function ClassificacoesPage() {
   const [defaultImp, setDefaultImp] = useState<string>('')
   const [defaultCon, setDefaultCon] = useState<string>('')
 
-  // Sync defaults from company when data loads
+  // Sync defaults from company when data loads or changes
   useEffect(() => {
     if (company) {
       setDefaultRec(company.default_class_recebimento ?? '')
@@ -237,15 +237,24 @@ export default function ClassificacoesPage() {
       setDefaultImp(company.default_class_imposto ?? '')
       setDefaultCon(company.default_class_consultor ?? '')
     }
-  }, [company?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [company]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeCount = classifications.filter((c) => c.active).length
 
   // Salva classificação padrão no company quando alterado pelo toggle no form
   async function setCompanyDefault(field: 'default_class_recebimento' | 'default_class_fee' | 'default_class_consultor', name: string | null) {
     if (!company?.id) return
-    await supabase.from('companies').update({ [field]: name }).eq('id', (company as any).id)
+    const { error } = await supabase.from('companies').update({ [field]: name } as any).eq('id', company.id as any)
+    if (error) {
+      toast({ title: 'Erro ao salvar padrão.', description: error.message, variant: 'destructive' })
+      return
+    }
+    // Atualiza estado local para o botão "Salvar configurações" não sobrescrever
+    if (field === 'default_class_recebimento') setDefaultRec(name ?? '')
+    if (field === 'default_class_fee') setDefaultFee(name ?? '')
+    if (field === 'default_class_consultor') setDefaultCon(name ?? '')
     queryClient.invalidateQueries({ queryKey: ['company'] })
+    toast({ title: name ? `Padrão "${name}" definido.` : 'Padrão removido.' })
   }
 
   // ── Render ────────────────────────────────────────────────

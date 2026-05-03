@@ -24,7 +24,7 @@ import {
   ENTRY_STATUS_LABELS, ENTRY_STATUS_COLORS,
 } from '@/lib/utils'
 import type { Entry, EntryStatus, Classification } from '@/lib/supabase/types'
-import { updateEntryStatus, updateEntryAmount, updateEntryClassification } from '@/lib/actions/entries'
+import { updateEntryStatus, updateEntryAmount, updateEntryClassification, updateEntryDate } from '@/lib/actions/entries'
 import Link from 'next/link'
 
 type EntryWithRelations = Entry & {
@@ -56,6 +56,11 @@ const STATUS_PREV_LABEL: Partial<Record<EntryStatus, string>> = {
   pago: 'Reverter para Faturado',
 }
 
+// Permite ir diretamente de "previsto" para "pago" sem passar por "faturado"
+const STATUS_DIRECT_PAY: Partial<Record<EntryStatus, EntryStatus>> = {
+  previsto: 'pago',
+}
+
 export default function LancamentosPage() {
   const supabase = createClient()
   const queryClient = useQueryClient()
@@ -75,6 +80,11 @@ export default function LancamentosPage() {
   // Revert status
   const [revertTarget, setRevertTarget] = useState<EntryWithRelations | null>(null)
   const [revertToStatus, setRevertToStatus] = useState<EntryStatus | null>(null)
+
+  // Date editing
+  const [editingDateId, setEditingDateId] = useState<string | null>(null)
+  const [editingDateField, setEditingDateField] = useState<'forecast_payment' | 'forecast_billing'>('forecast_payment')
+  const [editDateValue, setEditDateValue] = useState('')
 
   const period = `${year}-${String(month).padStart(2, '0')}`
 
@@ -103,7 +113,8 @@ export default function LancamentosPage() {
         .from('classifications')
         .select('*')
         .eq('active', true)
-        .in('type', ['entrada', 'ambos'])
+        .eq('is_totalizador', false)
+        .order('sort_order')
         .order('name')
       if (error) throw error
       return (data ?? []) as Classification[]
@@ -166,6 +177,31 @@ export default function LancamentosPage() {
     },
     onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
   })
+
+  const dateMutation = useMutation({
+    mutationFn: async ({ id, field, value }: { id: string; field: 'forecast_payment' | 'forecast_billing'; value: string | null }) => {
+      await updateEntryDate(id, field, value)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
+      toast({ title: 'Data atualizada.' })
+      setEditingDateId(null)
+    },
+    onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
+  })
+
+  function startEditDate(entry: EntryWithRelations, field: 'forecast_payment' | 'forecast_billing') {
+    setEditingDateId(entry.id)
+    setEditingDateField(field)
+    setEditDateValue(field === 'forecast_payment' ? (entry.forecast_payment ?? '') : (entry.forecast_billing ?? ''))
+    setEditingAmountId(null)
+    setEditingClassId(null)
+  }
+
+  function confirmEditDate() {
+    if (!editingDateId) return
+    dateMutation.mutate({ id: editingDateId, field: editingDateField, value: editDateValue || null })
+  }
 
   // ── Derived ────────────────────────────────────────────────────────────
   const filtered = statusFilter === 'all'
@@ -440,14 +476,46 @@ export default function LancamentosPage() {
                         )}
                       </td>
 
-                      {/* Prev. faturamento */}
+                      {/* Prev. faturamento — editável inline para previsto */}
                       <td className="px-4 py-3 text-slate-500 text-xs hidden lg:table-cell">
-                        {entry.forecast_billing ? formatDate(entry.forecast_billing) : '—'}
+                        {editingDateId === entry.id && editingDateField === 'forecast_billing' ? (
+                          <div className="flex items-center gap-1">
+                            <Input type="date" value={editDateValue} onChange={(e) => setEditDateValue(e.target.value)}
+                              className="h-6 text-xs px-1 w-32" autoFocus
+                              onKeyDown={(e) => { if (e.key === 'Enter') confirmEditDate(); if (e.key === 'Escape') setEditingDateId(null) }}
+                            />
+                            <Button size="icon" className="h-6 w-6 bg-green-600 hover:bg-green-700" onClick={confirmEditDate} disabled={dateMutation.isPending}><Check size={10} /></Button>
+                            <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setEditingDateId(null)}><X size={10} /></Button>
+                          </div>
+                        ) : (
+                          <button onClick={() => entry.status === 'previsto' ? startEditDate(entry, 'forecast_billing') : undefined}
+                            className={`group flex items-center gap-1 ${entry.status === 'previsto' ? 'hover:text-teal-600 cursor-pointer' : 'cursor-default'}`}
+                          >
+                            {entry.forecast_billing ? formatDate(entry.forecast_billing) : <span className="text-slate-300">—</span>}
+                            {entry.status === 'previsto' && <Pencil size={9} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                          </button>
+                        )}
                       </td>
 
-                      {/* Prev. pagamento */}
+                      {/* Prev. pagamento — editável inline para previsto */}
                       <td className="px-4 py-3 text-slate-500 text-xs">
-                        {entry.forecast_payment ? formatDate(entry.forecast_payment) : '—'}
+                        {editingDateId === entry.id && editingDateField === 'forecast_payment' ? (
+                          <div className="flex items-center gap-1">
+                            <Input type="date" value={editDateValue} onChange={(e) => setEditDateValue(e.target.value)}
+                              className="h-6 text-xs px-1 w-32" autoFocus
+                              onKeyDown={(e) => { if (e.key === 'Enter') confirmEditDate(); if (e.key === 'Escape') setEditingDateId(null) }}
+                            />
+                            <Button size="icon" className="h-6 w-6 bg-green-600 hover:bg-green-700" onClick={confirmEditDate} disabled={dateMutation.isPending}><Check size={10} /></Button>
+                            <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setEditingDateId(null)}><X size={10} /></Button>
+                          </div>
+                        ) : (
+                          <button onClick={() => entry.status === 'previsto' ? startEditDate(entry, 'forecast_payment') : undefined}
+                            className={`group flex items-center gap-1 ${entry.status === 'previsto' ? 'hover:text-teal-600 cursor-pointer' : 'cursor-default'}`}
+                          >
+                            {entry.forecast_payment ? formatDate(entry.forecast_payment) : <span className="text-slate-300">—</span>}
+                            {entry.status === 'previsto' && <Pencil size={9} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                          </button>
+                        )}
                       </td>
 
                       {/* Status */}
@@ -459,7 +527,7 @@ export default function LancamentosPage() {
 
                       {/* Ação */}
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 flex-wrap">
                           {nextStatus && nextLabel && (
                             <Button
                               size="sm"
@@ -470,6 +538,20 @@ export default function LancamentosPage() {
                             >
                               <Check size={11} />
                               {nextLabel}
+                            </Button>
+                          )}
+                          {/* Atalho: pagar diretamente (previsto → pago) */}
+                          {STATUS_DIRECT_PAY[entry.status] && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs gap-1 text-slate-400 hover:text-green-700 hover:bg-green-50"
+                              onClick={() => statusMutation.mutate({ entry, newStatus: STATUS_DIRECT_PAY[entry.status]! })}
+                              disabled={statusMutation.isPending}
+                              title="Marcar como pago (sem faturamento)"
+                            >
+                              <Check size={11} />
+                              Pagar
                             </Button>
                           )}
                           {STATUS_PREV[entry.status] && STATUS_PREV_LABEL[entry.status] && (

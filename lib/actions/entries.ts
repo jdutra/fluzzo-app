@@ -213,6 +213,23 @@ export async function deleteEntry(id: string, projectId: string) {
 }
 
 /**
+ * Atualiza data de faturamento ou pagamento de um lançamento.
+ */
+export async function updateEntryDate(
+  id: string,
+  field: 'forecast_payment' | 'forecast_billing',
+  value: string | null
+) {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('entries')
+    .update({ [field]: value } as any)
+    .eq('id', id)
+  if (error) throw error
+  revalidatePath('/lancamentos')
+}
+
+/**
  * Atualiza classificação de um lançamento e grava auditoria.
  */
 export async function updateEntryClassification(

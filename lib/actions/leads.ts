@@ -60,13 +60,14 @@ export async function convertLeadToProject(
 
   // Copia os produtos do lead para o projeto (incluindo valor negociado)
   if (leadProducts && leadProducts.length > 0) {
-    await supabase.from('project_products').insert(
+    const { error: ppError } = await supabase.from('project_products').insert(
       leadProducts.map((lp) => ({
         project_id: project.id,
         product_id: lp.product_id,
         value: (lp as any).value ?? null,
       }))
     )
+    if (ppError) console.error('[convertLeadToProject] project_products insert error:', ppError.message)
   }
 
   // Se o lead tem parceiro, copia para project_partners

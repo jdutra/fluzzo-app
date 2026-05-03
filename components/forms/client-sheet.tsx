@@ -28,6 +28,7 @@ const schema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
   cnpj: z.string().optional(),
   type: z.enum(['Cliente', 'Lead']),
+  indicator_id: z.string().optional(),
   contact: z.string().optional(),
   start_date: z.string().optional(),
   segment_macro: z.string().optional(),
@@ -68,6 +69,14 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
     },
   })
 
+  const { data: partners = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['partners-active'],
+    queryFn: async () => {
+      const { data } = await supabase.from('partners').select('id, name').order('name')
+      return data ?? []
+    },
+  })
+
   // Contatos existentes do cliente (em edição)
   // ATENÇÃO: não usar default = [] inline — cria nova referência a cada render e causa loop no useEffect
   const { data: existingContacts, isSuccess: contactsLoaded } = useQuery<ClientContact[]>({
@@ -96,6 +105,7 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
         name: client.name,
         cnpj: client.cnpj ?? '',
         type: (client.type === 'Fluzzo' ? 'Cliente' : (client.type as 'Cliente' | 'Lead')) ?? 'Cliente',
+        indicator_id: (client as any).indicator_id ?? '',
         contact: client.contact ?? '',
         start_date: client.start_date ?? '',
         segment_macro: client.segment_macro ?? '',
@@ -144,6 +154,7 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
         name: data.name,
         cnpj: data.cnpj || null,
         type: data.type,
+        indicator_id: data.indicator_id || null,
         contact: data.contact || null,
         start_date: data.start_date || null,
         segment_macro: data.segment_macro || null,
@@ -242,6 +253,25 @@ export function ClientSheet({ open, onOpenChange, client, onSuccess }: ClientShe
                 </Select>
               </div>
             </div>
+
+            {/* Parceiro indicador */}
+            {partners.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Parceiro <span className="text-xs text-slate-400 font-normal">(quem nos indicou este cliente)</span></Label>
+                <Select
+                  value={watch('indicator_id') ?? ''}
+                  onValueChange={(v) => setValue('indicator_id', v === '_none' ? '' : v)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Nenhum</SelectItem>
+                    {partners.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Data início + UF */}
             <div className="grid grid-cols-2 gap-3">
