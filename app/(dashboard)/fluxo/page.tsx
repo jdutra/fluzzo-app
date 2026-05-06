@@ -316,7 +316,9 @@ export default function FluxoPage() {
   })
 
   function openManualSheet() {
-    reset({ type: 'saida', period: `${year}-${String(now.getMonth() + 1).padStart(2, '0')}` })
+    // Usa new Date() para evitar mês desatualizado (now é capturado no mount)
+    const today = new Date()
+    reset({ type: 'saida', period: `${year}-${String(today.getMonth() + 1).padStart(2, '0')}` })
     setManualSheetOpen(true)
   }
 
@@ -536,6 +538,11 @@ export default function FluxoPage() {
                       ? (spreadsheet.geracaoOpByMonth[p] / spreadsheet.totalEntradaOpByMonth[p]) * 100
                       : 0
                   )}
+                  totalPctFmt={() => {
+                    const totalGO = monthPeriods.reduce((s, p) => s + (spreadsheet.geracaoOpByMonth[p] ?? 0), 0)
+                    const totalEO = monthPeriods.reduce((s, p) => s + (spreadsheet.totalEntradaOpByMonth[p] ?? 0), 0)
+                    return totalEO > 0 ? `${((totalGO / totalEO) * 100).toFixed(1)}%` : ''
+                  }}
                 />
 
                 {/* ══ GRUPO: Entradas Não Operacionais ══ */}
@@ -601,6 +608,11 @@ export default function FluxoPage() {
                       ? (spreadsheet.geracaoLiquidaByMonth[p] / spreadsheet.totalEntradaOpByMonth[p]) * 100
                       : 0
                   )}
+                  totalPctFmt={() => {
+                    const totalGL = monthPeriods.reduce((s, p) => s + (spreadsheet.geracaoLiquidaByMonth[p] ?? 0), 0)
+                    const totalEO = monthPeriods.reduce((s, p) => s + (spreadsheet.totalEntradaOpByMonth[p] ?? 0), 0)
+                    return totalEO > 0 ? `${((totalGL / totalEO) * 100).toFixed(1)}%` : ''
+                  }}
                 />
 
                 {/* ── Margem Líquida ── */}
@@ -811,7 +823,7 @@ function SpreadGroupHeader({
 }
 
 function SpreadRow({
-  label, values, variant, fmt, empty = false, totalFmt, pctValues, totalMode = 'sum',
+  label, values, variant, fmt, empty = false, totalFmt, pctValues, totalMode = 'sum', totalPctFmt,
 }: {
   label: string
   values: number[]
@@ -821,6 +833,7 @@ function SpreadRow({
   totalFmt?: (values: number[]) => string
   pctValues?: number[]
   totalMode?: 'sum' | 'last'
+  totalPctFmt?: () => string
 }) {
   const total = totalMode === 'last' ? values[values.length - 1] : values.reduce((s, v) => s + v, 0)
 
@@ -868,6 +881,8 @@ function SpreadRow({
   const totalPct = pctValues
     ? (totalMode === 'last' ? pctValues[pctValues.length - 1] : pctValues.reduce((s, v) => s + v, 0) / pctValues.length)
     : null
+  // totalPctFmt overrides the arithmetic mean for annual total %
+  const totalPctDisplay = totalPctFmt ? totalPctFmt() : (totalPct !== null && totalPct !== 0 ? `${totalPct.toFixed(1)}%` : null)
 
   return (
     <tr className={s.row}>
@@ -885,8 +900,8 @@ function SpreadRow({
       })}
       <td className={`px-2 py-1.5 text-right ${s.totalCell}`}>
         {empty ? '—' : totalFmt ? totalFmt(values) : fmt(total)}
-        {totalPct !== null && totalPct !== 0 && (
-          <div className="text-[9px] opacity-70 font-normal leading-tight">{totalPct.toFixed(1)}%</div>
+        {totalPctDisplay && (
+          <div className="text-[9px] opacity-70 font-normal leading-tight">{totalPctDisplay}</div>
         )}
       </td>
     </tr>

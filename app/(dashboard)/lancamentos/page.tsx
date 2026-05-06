@@ -76,6 +76,7 @@ export default function LancamentosPage() {
 
   // Classification editing
   const [editingClassId, setEditingClassId] = useState<string | null>(null)
+  const [editClassValue, setEditClassValue] = useState('')
 
   // Revert status
   const [revertTarget, setRevertTarget] = useState<EntryWithRelations | null>(null)
@@ -129,16 +130,23 @@ export default function LancamentosPage() {
     ])
   ).sort()
 
+  const [mutatingStatusId, setMutatingStatusId] = useState<string | null>(null)
+
   // ── Mutations ─────────────────────────────────────────────────────────
   const statusMutation = useMutation({
     mutationFn: async ({ entry, newStatus }: { entry: Entry; newStatus: EntryStatus }) => {
+      setMutatingStatusId(entry.id)
       await updateEntryStatus(entry.id, newStatus, entry.status)
     },
     onSuccess: () => {
+      setMutatingStatusId(null)
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       toast({ title: 'Status atualizado.' })
     },
-    onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
+    onError: (e: Error) => {
+      setMutatingStatusId(null)
+      toast({ title: 'Erro.', description: e.message, variant: 'destructive' })
+    },
   })
 
   const amountMutation = useMutation({
@@ -219,12 +227,22 @@ export default function LancamentosPage() {
   }, {})
 
   // ── Helpers ────────────────────────────────────────────────────────────
+  function clearEditing() {
+    setEditingAmountId(null)
+    setEditAmountValue('')
+    setEditingClassId(null)
+    setEditClassValue('')
+    setEditingDateId(null)
+  }
+
   function prevMonth() {
+    clearEditing()
     if (month === 1) { setMonth(12); setYear((y) => y - 1) }
     else setMonth((m) => m - 1)
   }
 
   function nextMonth() {
+    clearEditing()
     if (month === 12) { setMonth(1); setYear((y) => y + 1) }
     else setMonth((m) => m + 1)
   }
@@ -253,7 +271,16 @@ export default function LancamentosPage() {
 
   function startEditClass(entry: Entry) {
     setEditingClassId(entry.id)
+    setEditClassValue(entry.classification ?? '')
     setEditingAmountId(null) // close any open amount editor
+  }
+
+  function confirmEditClass(entry: Entry) {
+    if (!editClassValue || editClassValue === entry.classification) {
+      setEditingClassId(null)
+      return
+    }
+    classMutation.mutate({ entry, newClass: editClassValue })
   }
 
   return (
@@ -385,15 +412,13 @@ export default function LancamentosPage() {
                         )}
                       </td>
 
-                      {/* Classificação — inline Select */}
+                      {/* Classificação — inline Select com confirm/cancel */}
                       <td className="px-4 py-3">
                         {isEditingClass ? (
                           <div className="flex items-center gap-1">
                             <Select
-                              defaultValue={entry.classification}
-                              onValueChange={(val) => {
-                                classMutation.mutate({ entry, newClass: val })
-                              }}
+                              value={editClassValue}
+                              onValueChange={(val) => setEditClassValue(val)}
                               disabled={classMutation.isPending}
                             >
                               <SelectTrigger className="h-7 w-44 text-xs">
@@ -409,7 +434,15 @@ export default function LancamentosPage() {
                             </Select>
                             <Button
                               size="icon"
-                              variant="ghost"
+                              className="h-7 w-7 bg-green-600 hover:bg-green-700"
+                              onClick={() => confirmEditClass(entry)}
+                              disabled={classMutation.isPending}
+                            >
+                              <Check size={11} />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="outline"
                               className="h-7 w-7"
                               onClick={() => setEditingClassId(null)}
                             >
@@ -534,10 +567,10 @@ export default function LancamentosPage() {
                               variant="ghost"
                               className="h-7 text-xs gap-1 text-slate-500 hover:text-teal-700 hover:bg-teal-50"
                               onClick={() => statusMutation.mutate({ entry, newStatus: nextStatus })}
-                              disabled={statusMutation.isPending}
+                              disabled={mutatingStatusId === entry.id}
                             >
                               <Check size={11} />
-                              {nextLabel}
+                              {mutatingStatusId === entry.id ? '...' : nextLabel}
                             </Button>
                           )}
                           {/* Atalho: pagar diretamente (previsto → pago) */}
@@ -547,7 +580,7 @@ export default function LancamentosPage() {
                               variant="ghost"
                               className="h-7 text-xs gap-1 text-slate-400 hover:text-green-700 hover:bg-green-50"
                               onClick={() => statusMutation.mutate({ entry, newStatus: STATUS_DIRECT_PAY[entry.status]! })}
-                              disabled={statusMutation.isPending}
+                              disabled={mutatingStatusId === entry.id}
                               title="Marcar como pago (sem faturamento)"
                             >
                               <Check size={11} />

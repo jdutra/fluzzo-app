@@ -147,8 +147,12 @@ export async function createManualEntries(params: {
   const addMonths = (dateStr: string | null, months: number): string | null => {
     if (!dateStr) return null
     const d = new Date(dateStr + 'T00:00:00')
-    return new Date(d.getFullYear(), d.getMonth() + months, d.getDate())
-      .toISOString().split('T')[0]
+    const targetYear = d.getFullYear() + Math.floor((d.getMonth() + months) / 12)
+    const targetMonth = ((d.getMonth() + months) % 12 + 12) % 12
+    // Clamp day para evitar overflow (ex: 31 jan + 1 mês = 28 fev)
+    const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate()
+    const day = Math.min(d.getDate(), lastDay)
+    return new Date(targetYear, targetMonth, day).toISOString().split('T')[0]
   }
 
   const entries = Array.from({ length: params.repetitions }, (_, i) => ({
@@ -227,6 +231,7 @@ export async function updateEntryDate(
     .eq('id', id)
   if (error) throw error
   revalidatePath('/lancamentos')
+  revalidatePath('/fluxo')
 }
 
 /**
@@ -255,6 +260,7 @@ export async function updateEntryClassification(
   })
 
   revalidatePath('/lancamentos')
+  revalidatePath('/fluxo')
 }
 
 /**

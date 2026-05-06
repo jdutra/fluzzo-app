@@ -28,6 +28,11 @@ export async function convertLeadToProject(
 
   if (leadError || !lead) throw leadError ?? new Error('Lead não encontrado')
 
+  // Guard: evitar conversão dupla
+  if ((lead as any).converted_project_id) {
+    throw new Error('Este lead já foi convertido em projeto.')
+  }
+
   // Busca produtos do lead (incluindo valor negociado)
   const { data: leadProducts } = await supabase
     .from('lead_products')
@@ -67,7 +72,7 @@ export async function convertLeadToProject(
         value: (lp as any).value ?? null,
       }))
     )
-    if (ppError) console.error('[convertLeadToProject] project_products insert error:', ppError.message)
+    if (ppError) throw ppError
   }
 
   // Se o lead tem parceiro, copia para project_partners

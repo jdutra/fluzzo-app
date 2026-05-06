@@ -201,17 +201,24 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
     },
   })
 
+  const [mutatingEntryId, setMutatingEntryId] = useState<string | null>(null)
+
   // ─── Mutations ────────────────────────────────────────────
   const statusMutation = useMutation({
     mutationFn: async ({ entry, newStatus }: { entry: Entry; newStatus: EntryStatus }) => {
+      setMutatingEntryId(entry.id)
       await updateEntryStatus(entry.id, newStatus, entry.status)
     },
     onSuccess: () => {
+      setMutatingEntryId(null)
       queryClient.invalidateQueries({ queryKey: ['project-entries', projectId] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       toast({ title: 'Status do lançamento atualizado.' })
     },
-    onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
+    onError: (e: Error) => {
+      setMutatingEntryId(null)
+      toast({ title: 'Erro.', description: e.message, variant: 'destructive' })
+    },
   })
 
   const addConsultantMutation = useMutation({
@@ -240,11 +247,32 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
   const removeConsultantMutation = useMutation({
     mutationFn: async (id: string) => {
+      // Busca o consultant_id antes de remover para poder apagar os lançamentos vinculados
+      const { data: row, error: fetchError } = await supabase
+        .from('project_consultants')
+        .select('consultant_id')
+        .eq('id', id)
+        .single()
+      if (fetchError) throw fetchError
+
+      const consultantId = (row as any)?.consultant_id
+
+      // Remove lançamentos automáticos do consultor neste projeto
+      const { error: entriesError } = await supabase
+        .from('entries')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('consultant_id', consultantId)
+        .eq('is_manual', false)
+      if (entriesError) throw entriesError
+
       const { error } = await supabase.from('project_consultants').delete().eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-consultants', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project-entries', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
       toast({ title: 'Consultor removido.' })
     },
     onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
@@ -260,6 +288,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         fee_amount: parseFloat(newPartner.fee_amount) || 0,
         installments: parseInt(newPartner.installments) || 1,
         company_id: project?.company_id ?? null,
+        billing_start_date: project?.billing_start_date ?? null,
       })
     },
     onSuccess: () => {
@@ -275,11 +304,32 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
   const removePartnerMutation = useMutation({
     mutationFn: async (id: string) => {
+      // Busca o partner_id antes de remover para poder apagar os lançamentos vinculados
+      const { data: row, error: fetchError } = await supabase
+        .from('project_partners')
+        .select('partner_id')
+        .eq('id', id)
+        .single()
+      if (fetchError) throw fetchError
+
+      const partnerId = (row as any)?.partner_id
+
+      // Remove lançamentos automáticos do parceiro neste projeto
+      const { error: entriesError } = await supabase
+        .from('entries')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('partner_id', partnerId)
+        .eq('is_manual', false)
+      if (entriesError) throw entriesError
+
       const { error } = await supabase.from('project_partners').delete().eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-partners', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project-entries', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
       toast({ title: 'Parceiro removido.' })
     },
     onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
@@ -907,7 +957,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                               {entry.is_manual ? (
                                 <span className="text-xs text-slate-400 italic">manual</span>
                               ) : entry.installment != null ? (
-                                `${entry.installment}/${entries.filter(e => !e.is_manual).length}`
+                                `${entry.installment}/${entries.filter(e => !e.is_manual && e.classification === entry.classification).length}`
                               ) : '—'}
                             </td>
                             <td className="px-4 py-2.5 text-slate-600 text-xs">{entry.classification}</td>
@@ -927,10 +977,10 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                                     size="sm" variant="ghost"
                                     className="h-7 text-xs gap-1 text-slate-400 hover:text-teal-700"
                                     onClick={() => statusMutation.mutate({ entry, newStatus: nextStatus })}
-                                    disabled={statusMutation.isPending}
+                                    disabled={mutatingEntryId === entry.id}
                                   >
                                     <Check size={11} />
-                                    {nextStatus === 'faturado' ? 'Faturar' : 'Pagar'}
+                                    {mutatingEntryId === entry.id ? '...' : nextStatus === 'faturado' ? 'Faturar' : 'Pagar'}
                                   </Button>
                                 )}
                                 <Button

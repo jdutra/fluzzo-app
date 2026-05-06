@@ -50,6 +50,14 @@ export async function createProjectWithEntries(params: {
 
   // Gera lançamentos se houver parcelas e receita
   if (installments > 0 && projectData.revenue > 0 && projectData.client_id) {
+    // Busca classificação padrão de receita da empresa
+    const { data: companyData } = await supabase
+      .from('companies')
+      .select('default_class_recebimento')
+      .eq('id', projectData.company_id as any)
+      .single()
+    const classification = (companyData as any)?.default_class_recebimento ?? 'Receita'
+
     await generateProjectEntries({
       project_id: project.id,
       company_id: projectData.company_id,
@@ -57,6 +65,7 @@ export async function createProjectWithEntries(params: {
       revenue: projectData.revenue,
       installments,
       billing_start_date: projectData.billing_start_date,
+      classification,
     })
   }
 
@@ -136,7 +145,8 @@ export async function addProjectConsultant(params: {
       ? new Date(params.billing_start_date + 'T00:00:00')
       : new Date()
     const entries = Array.from({ length: params.installments }, (_, i) => {
-      const payDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, baseDate.getDate())
+      // Usa último dia do mês para padronizar com lançamentos de receita
+      const payDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + i + 1, 0)
       return {
         project_id: params.project_id,
         company_id: params.company_id,
@@ -150,7 +160,8 @@ export async function addProjectConsultant(params: {
         order_num: i + 1,
       }
     })
-    await supabase.from('entries').insert(entries)
+    const { error: entryError } = await supabase.from('entries').insert(entries)
+    if (entryError) throw entryError
   }
 
   revalidatePath(`/projetos/${params.project_id}`)
@@ -167,6 +178,7 @@ export async function addProjectPartner(params: {
   fee_amount: number
   installments: number
   company_id: string | null
+  billing_start_date?: string | null
 }) {
   const supabase = createClient()
 
@@ -191,10 +203,13 @@ export async function addProjectPartner(params: {
 
   // Auto-gerar lançamentos de débito de fee para o parceiro
   if (params.fee_amount > 0 && params.installments >= 1) {
-    const baseDate = new Date()
+    const baseDate = params.billing_start_date
+      ? new Date(params.billing_start_date + 'T00:00:00')
+      : new Date()
     const amountPerInstallment = params.fee_amount / params.installments
     const entries = Array.from({ length: params.installments }, (_, i) => {
-      const payDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1)
+      // Usa último dia do mês para padronizar com lançamentos de receita
+      const payDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + i + 1, 0)
       return {
         project_id: params.project_id,
         company_id: params.company_id,
@@ -208,7 +223,8 @@ export async function addProjectPartner(params: {
         order_num: i + 1,
       }
     })
-    await supabase.from('entries').insert(entries)
+    const { error: entryError } = await supabase.from('entries').insert(entries)
+    if (entryError) throw entryError
   }
 
   revalidatePath(`/projetos/${params.project_id}`)
