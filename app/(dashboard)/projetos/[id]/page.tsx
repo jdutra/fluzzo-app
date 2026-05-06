@@ -247,33 +247,15 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
   const removeConsultantMutation = useMutation({
     mutationFn: async (id: string) => {
-      // Busca o consultant_id antes de remover para poder apagar os lançamentos vinculados
-      const { data: row, error: fetchError } = await supabase
-        .from('project_consultants')
-        .select('consultant_id')
-        .eq('id', id)
-        .single()
-      if (fetchError) throw fetchError
-
-      const consultantId = (row as any)?.consultant_id
-
-      // Remove lançamentos automáticos do consultor neste projeto
-      const { error: entriesError } = await supabase
-        .from('entries')
-        .delete()
-        .eq('project_id', projectId)
-        .eq('consultant_id', consultantId)
-        .eq('is_manual', false)
-      if (entriesError) throw entriesError
-
       const { error } = await supabase.from('project_consultants').delete().eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-consultants', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['project-entries', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['entries'] })
-      toast({ title: 'Consultor removido.' })
+      toast({
+        title: 'Consultor desvinculado.',
+        description: 'Os lançamentos e registros financeiros deste consultor foram mantidos.',
+      })
     },
     onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
   })
@@ -304,33 +286,15 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
   const removePartnerMutation = useMutation({
     mutationFn: async (id: string) => {
-      // Busca o partner_id antes de remover para poder apagar os lançamentos vinculados
-      const { data: row, error: fetchError } = await supabase
-        .from('project_partners')
-        .select('partner_id')
-        .eq('id', id)
-        .single()
-      if (fetchError) throw fetchError
-
-      const partnerId = (row as any)?.partner_id
-
-      // Remove lançamentos automáticos do parceiro neste projeto
-      const { error: entriesError } = await supabase
-        .from('entries')
-        .delete()
-        .eq('project_id', projectId)
-        .eq('partner_id', partnerId)
-        .eq('is_manual', false)
-      if (entriesError) throw entriesError
-
       const { error } = await supabase.from('project_partners').delete().eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-partners', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['project-entries', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['entries'] })
-      toast({ title: 'Parceiro removido.' })
+      toast({
+        title: 'Parceiro desvinculado.',
+        description: 'Os lançamentos e registros financeiros deste parceiro foram mantidos.',
+      })
     },
     onError: (e: Error) => toast({ title: 'Erro.', description: e.message, variant: 'destructive' }),
   })
