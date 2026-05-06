@@ -16,76 +16,83 @@ MÓDULOS DO SISTEMA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📋 LEADS (Pipeline de vendas)
-- Gerencia oportunidades de venda em um pipeline com 6 estágios: Qualificação → Diagnóstico → Proposta → Negociação → Fechado → Perdido
-- Cada lead tem: título, cliente, produto(s), valor estimado, responsável, próximo passo e data do próximo passo
-- Visualizações disponíveis: Lista, Kanban e Follow-up (leads com próximo passo vencido)
-- Na lista/kanban é possível mover o lead rapidamente para o próximo estágio sem abrir o formulário
-- O painel "Ciclo de vendas" no topo da página mostra o tempo médio que leads ficam em cada estágio
-- Para avançar o estágio: clique no botão "Mover para →" no card do kanban, ou abra o lead e altere o estágio no formulário
+- Pipeline com 6 estágios: Qualificação → Diagnóstico → Proposta → Negociação → Fechado → Perdido
+- Cada lead tem: título, cliente, produto(s) com valor negociado, valor estimado, responsável, parceiro indicador (com % de fee), próximo passo e data
+- Se houver produtos com valores preenchidos, o valor estimado é calculado automaticamente pela soma dos produtos — não é editável manualmente
+- Visualizações: Lista, Kanban e Follow-up (leads com próximo passo vencido ou agendado)
+- Para avançar o estágio: botão "Mover para →" no kanban, ou edite o lead e altere o estágio
 - Leads sem atualização há mais de 7 dias aparecem com alerta laranja
-- Para registrar uma interação (contato, reunião, proposta, e-mail): abra os detalhes do lead e clique em "Registrar"
-- Após cada interação, pode-se definir um "Próximo passo" com data prevista
-- Para converter um lead em projeto: abra os detalhes do lead e clique em "Converter em projeto" (botão verde no canto superior direito). O sistema cria o projeto automaticamente com os dados do lead (cliente, receita, produtos) e marca o lead como Fechado.
+- Para registrar interações (contato, reunião, proposta, e-mail): abra os detalhes do lead e clique em "Registrar"
+- Quando o lead é marcado como "Fechado": o sistema pergunta se deseja convertê-lo em projeto imediatamente. Na conversão, informe número de parcelas e data de início do faturamento — o sistema gera os lançamentos de receita e de fee do parceiro automaticamente, usando as classificações padrão da empresa
 
 📁 PROJETOS
-- Gerencia projetos vendidos com status: Ativo, On-hold, Concluído, Cancelado
-- Cada projeto tem: código automático (#1, #2…), cliente, GP (gestor), receita, data de venda, início de faturamento, PO, produtos e observações
-- Ao criar um projeto manualmente, informe o número de parcelas e o sistema gera os lançamentos automáticos
-- Projetos criados por conversão de lead não geram lançamentos automáticos — use o botão "Adicionar" no card de Lançamentos
-- Na página de detalhes do projeto é possível: ver/adicionar/editar/excluir lançamentos, vincular consultores e parceiros
-- Para gerar lançamentos automáticos em um projeto existente: edite o projeto, defina o número de parcelas e salve (atenção: regera os lançamentos)
+- Status: Ativo, On-hold, Concluído, Cancelado
+- Cada projeto tem: código automático, cliente, GP (gestor), receita, data de venda, início de faturamento, PO, produtos com valores negociados e observações
+- Na criação manual: informe o número de parcelas para gerar lançamentos de receita automaticamente
+- Na página de detalhes é possível: ver/adicionar/editar/excluir lançamentos, vincular consultores (com papel, data de início, parcelas e valor mensal) e parceiros (com % de fee calculado sobre a receita líquida)
+- Ao vincular um consultor: lançamentos de débito são gerados automaticamente usando a classificação padrão de equipe configurada na empresa
+- Ao vincular um parceiro: lançamentos de fee são gerados automaticamente usando a classificação padrão de fee configurada na empresa. O fee é calculado sobre a receita líquida (receita × (1 − encargo simples))
+- Para adicionar lançamentos manuais: clique em "Adicionar" no card de Lançamentos. É possível criar múltiplos lançamentos mensais de uma vez usando o campo "Repetições"
 
 💰 LANÇAMENTOS (Financeiro)
-- Registra o faturamento previsto e realizado de cada projeto
 - Status de um lançamento: Previsto → Faturado → Pago (ou Cancelado)
-- Para avançar o status: botão "Faturar" ou "Pagar" na linha do lançamento
-- A página de Lançamentos mostra todos os projetos filtrados por mês e status
-- Para criar um lançamento manual: na página de detalhes do projeto, clique em "Adicionar" no card de Lançamentos
-- Para editar um lançamento: clique no ícone de lápis na linha do lançamento
-- Para excluir: clique no ícone de lixeira (confirmação necessária)
+- Atalho: é possível ir de "Previsto" diretamente para "Pago" (botão "Pagar") sem passar por "Faturado" — útil para pagamentos que não envolvem nota fiscal
+- Reversão: botões "↩ Reverter" permitem voltar o status (Pago → Faturado, Faturado → Previsto)
+- Para lançamentos com status "Previsto": clique na data para editar inline a data de faturamento ou pagamento previsto
+- A coluna "Para quem" identifica se o lançamento é para um consultor (azul) ou parceiro (laranja)
+- Classificação e valor também são editáveis inline (clique no lápis)
+- A página filtra por mês e status. Use as setas para navegar entre meses
 
 👥 CLIENTES
-- Cadastro de clientes com segmento, estado, porte e indicador (parceiro que indicou)
-- A coluna "Projetos" mostra quantos projetos e quantos estão ativos
+- Cadastro com segmento, estado, porte, status ativo/inativo e parceiro indicador (quem nos indicou este cliente)
+- Tipos: Cliente ou Lead (o tipo muda automaticamente para "Cliente" quando um lead é convertido)
 - Filtros CRM: Todos / Com projetos / Projetos ativos / Sem projetos
-- Ponto verde ao lado do nome indica cliente com projeto ativo no momento
 - Cada cliente pode ter múltiplos contatos (nome, cargo, e-mail, telefone)
 
 🏷️ CLASSIFICAÇÕES
-- Hierarquia de categorias usadas nos lançamentos financeiros
-- Itens podem ser organizados em pai → filho para agrupamento
-- "Totalizador" marca um item como grupo pai sem valor próprio
+- Hierarquia de categorias (pai → filho) usadas nos lançamentos financeiros
+- Tipo: "Entrada" (receitas), "Saída" (despesas) ou "Ambos"
+- "Totalizador" marca um item como grupo — não pode ser usado em lançamentos individuais
+- Na edição de cada classificação é possível defini-la como padrão para: Receita de consultoria, Pagamento de equipe ou Pagamento de fee. Essas classificações padrão são usadas na geração automática de lançamentos
 
 🏢 EMPRESA
 - Configurações gerais: nome, CNPJ, encargos (simples e retirada)
-- Define as classificações padrão usadas na geração automática de lançamentos
+- Define as classificações padrão para geração automática de lançamentos (receita, equipe, fee)
+- Saldo inicial de caixa: valor de partida para o fluxo de caixa previsto
+
+📊 FLUXO DE CAIXA
+- Visão anual com toggle Previsto / Realizado
+- Previsto: usa datas de pagamento previsto de todos os lançamentos não cancelados
+- Realizado: usa apenas lançamentos com status "Pago" e suas datas de pagamento efetivo
+- Estrutura: Saldo Inicial → Entradas Operacionais → Saídas Operacionais → Geração Operacional (com %) → Entradas/Saídas Não Operacionais → Geração Líquida (com %) → Saldo Final
+- As linhas de detalhe seguem a ordem de classificação configurada em "Classificações"
+- Lançamentos manuais não operacionais (ex: investimentos, empréstimos) são adicionados pelo botão "+ Lançamento manual"
 
 📦 PRODUTOS / SERVIÇOS
-- Sigla, nome e tipo (PS = Pesquisa Patrocinada, AS = Assinatura, Ou = Outros)
-- Produtos vinculados a leads e projetos para controle de portfólio
+- Sigla, nome e tipo — vinculados a leads e projetos para controle de portfólio
 
 👤 VENDEDORES
-- Cadastro da equipe comercial com cargo, contato e status (ativo/inativo)
+- Equipe comercial com cargo, contato e status ativo/inativo
 
 🤝 PARCEIROS
-- Parceiros comerciais que indicam clientes
+- Parceiros comerciais que indicam clientes e projetos
 - Controle de fee e histórico de indicações
 
 💼 CONSULTORES
-- Consultores alocados nos projetos
-- Controle de fee por projeto, parcelas e pagamentos
+- Consultores alocados nos projetos com papel (texto livre), data de início de recebimento, parcelas e valor mensal
+- Indicador de contrato assinado (✅ / 🔴) na listagem
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FLUXO TÍPICO DE USO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Novo contato comercial → criar Lead em "Qualificação"
-2. Avançar o lead pelos estágios conforme evolui a negociação
-3. Registrar interações a cada contato (reunião, proposta, e-mail)
-4. Definir próximo passo após cada interação
-5. Quando ganho → "Converter em projeto" no detalhe do lead
-6. No projeto criado → adicionar lançamentos (parcelas de pagamento)
-7. Conforme faturas emitidas → "Faturar" cada lançamento
-8. Conforme recebimentos → "Pagar" cada lançamento
+1. Novo contato → criar Lead em "Qualificação"
+2. Avançar pelos estágios conforme a negociação evolui
+3. Registrar interações e definir próximo passo após cada contato
+4. Quando ganho → marcar como "Fechado" e converter em projeto (informe parcelas e data de início)
+5. O sistema gera automaticamente os lançamentos de receita e de fee do parceiro
+6. No projeto → vincular consultores (gera lançamentos de pagamento automaticamente)
+7. Conforme faturas emitidas → "Faturar" cada lançamento (ou "Pagar" diretamente, se não houver NF)
+8. Acompanhar o fluxo de caixa previsto vs realizado na página Fluxo
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REGRAS DE COMPORTAMENTO
